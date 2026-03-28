@@ -44,8 +44,9 @@ export async function* analyzeImageStream(imageRef: string) {
     }
 
     const critiques = (await response.json()) as CritiquePoint[];
+    const notes = Array.isArray(critiques) && critiques.length > 0 ? critiques : fallbackCritiques;
 
-    for (const point of critiques) {
+    for (const point of notes) {
       await new Promise((resolve) => window.setTimeout(resolve, 120));
       yield point;
     }

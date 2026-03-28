@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redline Pitch Deck</title>
+    <style>
+      :root {
+        --paper: #f6efe6;
+        --paper-strong: #fbf7f2;
+        --ink: #231713;
+        --muted: #755c4d;
+        --red: #d73721;
+        --red-deep: #82190f;
+        --line: rgba(115, 83, 63, 0.18);
+        --shadow: 0 26px 90px rgba(70, 45, 30, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(255, 252, 248, 0.95), rgba(246, 239, 230, 0.94)),
+          linear-gradient(180deg, #fffdf9, #f2e5d6);
+        color: var(--ink);
+        overflow: hidden;
+      }
+
+      .deck {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        padding: 24px;
+      }
+
+      .slide {
+        position: absolute;
+        inset: 24px;
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 28px;
+        padding: 36px;
+        border: 1px solid var(--line);
+        border-radius: 36px;
+        background:
+          radial-gradient(circle at top right, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0) 34%),
+          linear-gradient(180deg, rgba(255, 251, 247, 0.94), rgba(246, 237, 226, 0.98));
+        box-shadow: var(--shadow);
+        opacity: 0;
+        transform: translateX(50px) scale(0.98);
+        pointer-events: none;
+        transition: opacity 360ms ease, transform 360ms ease, filter 360ms ease;
+        filter: blur(18px);
+      }
+
+      .slide.active {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+        filter: blur(0);
+        pointer-events: auto;
+      }
+
+      .left,
+      .right {
+        min-width: 0;
+      }
+
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+
+      .kicker::before {
+        content: "";
+        width: 48px;
+        height: 1px;
+        background: linear-gradient(90deg, var(--red), rgba(215, 55, 33, 0));
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        font-family: "Iowan Old Style", "Palatino Linotype", serif;
+        font-style: italic;
+        line-height: 0.95;
+        letter-spacing: -0.05em;
+      }
+
+      h1 {
+        font-size: clamp(56px, 8vw, 108px);
+      }
+
+      h2 {
+        font-size: clamp(36px, 4.2vw, 62px);
+      }
+
+      .redline-wordmark {
+        display: flex;
+        align-items: baseline;
+        gap: 2px;
+        margin-bottom: 18px;
+      }
+
+      .redline-wordmark .red {
+        color: transparent;
+        background: linear-gradient(110deg, var(--red-deep), var(--red), #ff8a63, var(--red));
+        background-size: 160% auto;
+        background-clip: text;
+        -webkit-background-clip: text;
+        animation: shimmer 3.8s ease-in-out infinite alternate;
+      }
+
+      .redline-wordmark .line {
+        color: var(--ink);
+      }
+
+      @keyframes shimmer {
+        from { background-position: 0% center; }
+        to { background-position: 100% center; }
+      }
+
+      .subhead {
+        margin-top: 14px;
+        max-width: 720px;
+        color: var(--muted);
+        font-size: 24px;
+        line-height: 1.4;
+      }
+
+      .quote {
+        margin-top: 28px;
+        padding: 24px 28px;
+        border: 1px solid rgba(215, 55, 33, 0.16);
+        border-radius: 28px;
+        background: linear-gradient(180deg, rgba(255, 245, 241, 0.92), rgba(255, 251, 247, 0.78));
+        color: var(--red-deep);
+        font-family: "Iowan Old Style", serif;
+        font-size: 34px;
+        line-height: 1.16;
+        font-style: italic;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        padding: 24px;
+        background: rgba(255, 255, 255, 0.58);
+        backdrop-filter: blur(10px);
+      }
+
+      .panel h3 {
+        margin: 0 0 14px;
+        font-size: 12px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .panel p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+        font-size: 18px;
+      }
+
+      ul {
+        margin: 20px 0 0;
+        padding-left: 26px;
+        font-size: 24px;
+        line-height: 1.45;
+      }
+
+      li + li {
+        margin-top: 14px;
+      }
+
+      .stat-grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .stat {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        padding: 18px 20px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(248, 240, 231, 0.9));
+      }
+
+      .stat strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 13px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .stat span {
+        display: block;
+        font-size: 28px;
+        line-height: 1.18;
+        font-family: "Iowan Old Style", serif;
+        font-style: italic;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 22px;
+      }
+
+      .feature {
+        min-height: 142px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.76), rgba(249,241,231,0.9));
+      }
+
+      .feature .label {
+        margin-bottom: 10px;
+        font-size: 12px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--red-deep);
+        font-weight: 700;
+      }
+
+      .feature .body {
+        font-size: 18px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: 24px;
+      }
+
+      .comparison .col {
+        border-radius: 26px;
+        padding: 22px;
+        border: 1px solid var(--line);
+        background: rgba(255,255,255,0.58);
+      }
+
+      .comparison h3 {
+        margin: 0 0 12px;
+        font-size: 16px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .comparison .bad h3 {
+        color: #7a5b49;
+      }
+
+      .comparison .good h3 {
+        color: var(--red-deep);
+      }
+
+      .comparison ul {
+        margin: 0;
+        padding-left: 22px;
+        font-size: 20px;
+      }
+
+      .demo-steps {
+        display: grid;
+        gap: 14px;
+        margin-top: 24px;
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 58px 1fr;
+        gap: 16px;
+        align-items: start;
+        padding: 16px 18px;
+        border-radius: 24px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.64);
+      }
+
+      .step .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 46px;
+        height: 46px;
+        border-radius: 999px;
+        background: #2f211a;
+        color: #fff4ea;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+
+      .step .text {
+        font-size: 21px;
+        line-height: 1.35;
+      }
+
+      .footer {
+        position: absolute;
+        left: 36px;
+        right: 36px;
+        bottom: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .controls {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        display: flex;
+        gap: 10px;
+        z-index: 20;
+      }
+
+      .controls button {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: rgba(255,255,255,0.78);
+        color: var(--ink);
+        padding: 12px 16px;
+        border-radius: 999px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 10px 24px rgba(70, 45, 30, 0.08);
+      }
+
+      .notes {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.45;
+      }
+
+      .mini {
+        font-size: 16px;
+      }
+
+      @media (max-width: 980px) {
+        .slide {
+          inset: 12px;
+          grid-template-columns: 1fr;
+          padding: 24px;
+          overflow: auto;
+        }
+
+        .footer {
+          position: static;
+          margin-top: 24px;
+          padding-bottom: 8px;
+        }
+
+        .controls {
+          right: 12px;
+          bottom: 12px;
+        }
+
+        h1 {
+          font-size: 64px;
+        }
+
+        h2 {
+          font-size: 42px;
+        }
+
+        .subhead,
+        ul,
+        .step .text {
+          font-size: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="deck">
+      <section class="slide active">
+        <div class="left">
+          <div class="kicker">Digital Media &amp; Creativity</div>
+          <div class="redline-wordmark">
+            <h1 class="red">Red</h1>
+            <h1 class="line">line</h1>
+          </div>
+          <p class="subhead">
+            An AI art director for works in progress that critiques composition, simulates lighting, stress-tests readability, and tells creators what to fix next.
+          </p>
+          <div class="quote">
+            We are not replacing artists. We are mentoring them in the messy middle of creation.
+          </div>
+        </div>
+        <div class="right">
+          <div class="stat-grid">
+            <div class="stat">
+              <strong>Core idea</strong>
+              <span>AI as mentor, not generator</span>
+            </div>
+            <div class="stat">
+              <strong>Who it helps</strong>
+              <span>Digital artists, illustrators, concept artists, and students</span>
+            </div>
+            <div class="stat">
+              <strong>Why it matters</strong>
+              <span>Better artistic decisions before time gets wasted on bad renders</span>
+            </div>
+          </div>
+          <div class="notes">Open strong: Redline is an AI-augmented art director for works in progress. It helps artists improve their own work instead of generating a replacement for it.</div>
+        </div>
+        <div class="footer"><span>Slide 1</span><span>Redline Pitch Deck</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="left">
+          <div class="kicker">The Problem</div>
+          <h2>Artists do not just need more generation. They need better direction.</h2>
+          <ul>
+            <li>Most AI art tools focus on replacing the creative process.</li>
+            <li>The real pain point is the middle of a piece, when an artist is unsure what to fix.</li>
+            <li>Feedback is often slow, vague, or disconnected from the artwork itself.</li>
+            <li>Creators waste hours rendering before they know if the piece even reads.</li>
+          </ul>
+        </div>
+        <div class="right">
+          <div class="panel">
+            <h3>Big takeaway</h3>
+            <p>The hardest part of making art is not starting. It is deciding what to change while the piece is still unfinished.</p>
+          </div>
+          <div class="notes">The key contrast is process versus output. Redline helps during the decision-making stage, when the work is still editable and artistic judgment matters most.</div>
+        </div>
+        <div class="footer"><span>Slide 2</span><span>The messy middle is underserved</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="left">
+          <div class="kicker">The Product</div>
+          <h2>Redline turns a WIP into an actionable mentor pass.</h2>
+          <div class="feature-grid">
+            <div class="feature"><div class="label">Critique</div><div class="body">Places visual critique directly on the artwork instead of giving generic text feedback.</div></div>
+            <div class="feature"><div class="label">Relight</div><div class="body">Lets artists audition stronger lighting directions before repainting highlights and shadows by hand.</div></div>
+            <div class="feature"><div class="label">Readability</div><div class="body">Checks whether the idea still reads at thumbnail size using silhouette and edge simplification.</div></div>
+            <div class="feature"><div class="label">Focus Region</div><div class="body">Boxes one weak area and runs a localized mentor pass instead of reanalyzing the whole image.</div></div>
+            <div class="feature"><div class="label">Layers</div><div class="body">Breaks the image into structural masses so artists can see design instead of noise.</div></div>
+            <div class="feature"><div class="label">Next Pass Plan</div><div class="body">Converts diagnosis into concrete, prioritized revision steps the artist can actually follow.</div></div>
+          </div>
+        </div>
+        <div class="right">
+          <div class="panel">
+            <h3>One sentence</h3>
+            <p>Redline behaves like a digital studio partner: diagnose, simulate, interpret, and guide.</p>
+          </div>
+          <div class="notes">This is where you establish breadth. It is not a one-feature demo. It is a workflow tool built around how artists actually iterate.</div>
+        </div>
+        <div class="footer"><span>Slide 3</span><span>Multiple tools, one workflow</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="left">
+          <div class="kicker">Differentiation</div>
+          <h2>This is not another AI art app. It is a decision engine for creators.</h2>
+          <div class="comparison">
+            <div class="col bad">
+              <h3>Typical AI art tools</h3>
+              <ul>
+                <li>Generate finished outputs</li>
+                <li>Encourage replacement</li>
+                <li>Give one-shot results</li>
+                <li>Focus on polish, not process</li>
+              </ul>
+            </div>
+            <div class="col good">
+              <h3>Redline</h3>
+              <ul>
+                <li>Improves the artist's own WIP</li>
+                <li>Keeps the creator in control</li>
+                <li>Builds a feedback loop</li>
+                <li>Supports artistic judgment in real time</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="right">
+          <div class="quote mini">
+            The uncommon move is not automating creation. It is augmenting creative judgment.
+          </div>
+          <div class="notes">Lean hard on the track language here. Innovation comes from the approach: AI mentorship instead of AI replacement.</div>
+        </div>
+        <div class="footer"><span>Slide 4</span><span>Why this is memorable</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="left">
+          <div class="kicker">Demo Flow</div>
+          <h2>A 45-second demo judges can follow instantly.</h2>
+          <div class="demo-steps">
+            <div class="step"><div class="num">1</div><div class="text">Drop in a work-in-progress sketch or painting.</div></div>
+            <div class="step"><div class="num">2</div><div class="text">Run <strong>Full Mentor Pass</strong> to generate critique, readability, structure, and planning.</div></div>
+            <div class="step"><div class="num">3</div><div class="text">Open <strong>Relight</strong> and drag the sun to show visible lighting changes.</div></div>
+            <div class="step"><div class="num">4</div><div class="text">Open <strong>Readability</strong> and show the silhouette plus thumbnail ladder.</div></div>
+            <div class="step"><div class="num">5</div><div class="text">Box one weak area with <strong>Focus Region</strong> and run a local mentor pass.</div></div>
+          </div>
+        </div>
+        <div class="right">
+          <div class="panel">
+            <h3>Demo goal</h3>
+            <p>Prove three things fast: it is useful, it is interactive, and it goes deeper than a single model call.</p>
+          </div>
+          <div class="notes">If time is short, prioritize Full Mentor Pass, Relight, and Focus Region. That sequence sells both UX and technical depth.</div>
+        </div>
+        <div class="footer"><span>Slide 5</span><span>Show, do not tell</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="left">
+          <div class="kicker">Adoption</div>
+          <h2>Why artists would actually use it</h2>
+          <ul>
+            <li>It catches weak composition before hours of rendering are lost.</li>
+            <li>It tests lighting directions without repainting from scratch.</li>
+            <li>It checks whether the piece works at small sizes for thumbnails, portfolios, and social media.</li>
+            <li>It gives plain-English next steps instead of vague critique.</li>
+            <li>It works across characters, environments, props, stylized pieces, and more.</li>
+          </ul>
+        </div>
+        <div class="right">
+          <div class="stat-grid">
+            <div class="stat">
+              <strong>Best use moment</strong>
+              <span>Before final render</span>
+            </div>
+            <div class="stat">
+              <strong>Best use habit</strong>
+              <span>Quick checkpoint between painting passes</span>
+            </div>
+          </div>
+          <div class="notes">This slide answers the adoption question. Judges do not just want something cool. They want something people could return to.</div>
+        </div>
+        <div class="footer"><span>Slide 6</span><span>Practical value</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="left">
+          <div class="kicker">Technical Depth</div>
+          <h2>More than a wrapper. Redline combines interactive analysis with private AI critique.</h2>
+          <ul>
+            <li>Client-side vision passes power relighting, structural layers, framing, and readability tests.</li>
+            <li>Focus Region enables local mentor passes on just one selected part of the artwork.</li>
+            <li>Critique runs through a server-side route so the Gemini API key stays private.</li>
+            <li>The workspace adapts to portrait and landscape art and supports real-time interactions.</li>
+          </ul>
+        </div>
+        <div class="right">
+          <div class="panel">
+            <h3>Engineering story</h3>
+            <p>This feels like a product because it combines multiple visual models, interaction design, caching, region selection, and server-side critique orchestration.</p>
+          </div>
+          <div class="notes">This is where developer judges should nod. It is not only a prompt. It is a full creative analysis system with UI and systems work behind it.</div>
+        </div>
+        <div class="footer"><span>Slide 7</span><span>Built, not mocked</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="left">
+          <div class="kicker">Track Fit</div>
+          <h2>Redline directly matches the Digital Media &amp; Creativity track.</h2>
+          <ul>
+            <li><strong>Creator-first:</strong> built specifically for art creation and iteration.</li>
+            <li><strong>Innovative:</strong> uses AI as mentor rather than as replacement.</li>
+            <li><strong>Useful:</strong> gives actions, not just observations.</li>
+            <li><strong>Usable:</strong> fast, visual, interactive, and understandable for artists and non-artists.</li>
+          </ul>
+        </div>
+        <div class="right">
+          <div class="quote mini">
+            Redline helps creators make stronger art, faster, while keeping the artist in control.
+          </div>
+          <div class="notes">This is your explicit answer to the rubric. Say the fit out loud so judges do not have to infer it themselves.</div>
+        </div>
+        <div class="footer"><span>Slide 8</span><span>Why it should win</span></div>
+      </section>
+
+      <section class="slide">
+        <div class="left">
+          <div class="kicker">Closing</div>
+          <h2>We did not ask AI to replace artists. We asked a better question.</h2>
+          <div class="quote">
+            What if AI could mentor artists while they create?
+          </div>
+        </div>
+        <div class="right">
+          <div class="stat-grid">
+            <div class="stat">
+              <strong>Redline is</strong>
+              <span>Your AI art director for the messy middle of creation</span>
+            </div>
+            <div class="stat">
+              <strong>Final message</strong>
+              <span>Better artistic decisions lead to better art</span>
+            </div>
+          </div>
+          <div class="notes">End on philosophy, not features. That is the most memorable version of the project.</div>
+        </div>
+        <div class="footer"><span>Slide 9</span><span>Thank you</span></div>
+      </section>
+    </main>
+
+    <div class="controls">
+      <button type="button" id="prev">Prev</button>
+      <button type="button" id="next">Next</button>
+    </div>
+
+    <script>
+      const slides = Array.from(document.querySelectorAll(".slide"));
+      const prev = document.getElementById("prev");
+      const next = document.getElementById("next");
+      let index = 0;
+
+      function render() {
+        slides.forEach((slide, slideIndex) => {
+          slide.classList.toggle("active", slideIndex === index);
+        });
+      }
+
+      function move(delta) {
+        index = Math.max(0, Math.min(slides.length - 1, index + delta));
+        render();
+      }
+
+      prev.addEventListener("click", () => move(-1));
+      next.addEventListener("click", () => move(1));
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight" || event.key === " " || event.key === "PageDown") {
+          event.preventDefault();
+          move(1);
+        }
+        if (event.key === "ArrowLeft" || event.key === "PageUp") {
+          event.preventDefault();
+          move(-1);
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>
