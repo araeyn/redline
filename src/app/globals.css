@@ -10,14 +10,14 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: var(--font-newsreader), serif;
+    font-family: var(--font-playfair), serif;
     background-image: url("https://www.transparenttextures.com/patterns/felt.png");
   }
 }
 
 @layer utilities {
   .font-serif {
-    font-family: var(--font-newsreader), serif;
+    font-family: var(--font-playfair), serif;
   }
   
   .font-outfit {
@@ -62,12 +62,12 @@
 
   /* Real Layer Deconstruction Styles */
   .layer-value-map {
-    filter: contrast(200%) grayscale(1);
+    filter: contrast(300%) grayscale(1);
     mix-blend-mode: overlay;
   }
 
   .layer-edge-detect {
-    filter: contrast(500%) invert(1) grayscale(1) brightness(0.8);
+    filter: contrast(500%) invert(1) grayscale(1) brightness(0.5);
     mix-blend-mode: color-burn;
   }
 }
