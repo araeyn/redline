@@ -1,10 +1,8 @@
-import { Navbar } from "@/components/Navbar";
 import Workspace from "@/components/Workspace";
 
 export default function Home() {
   return (
-    <main className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-50 overflow-hidden font-sans">
-      <Navbar />
+    <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#f7ecdf] text-zinc-900">
       <Workspace />
     </main>
   );

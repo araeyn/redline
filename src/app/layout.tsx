@@ -1,19 +1,11 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Outfit } from "next/font/google";
+import "@fontsource/playfair-display/400.css";
+import "@fontsource/playfair-display/400-italic.css";
+import "@fontsource/playfair-display/700.css";
+import "@fontsource/playfair-display/700-italic.css";
+import "@fontsource/playfair-display/900.css";
+import "@fontsource/playfair-display/900-italic.css";
 import "./globals.css";
-
-const playfair = Playfair_Display({ 
-  subsets: ["latin"], 
-  style: ["normal", "italic"],
-  display: "swap",
-  variable: "--font-playfair" 
-});
-
-const outfit = Outfit({ 
-  subsets: ["latin"], 
-  display: "swap",
-  variable: "--font-outfit" 
-});
 
 export const metadata: Metadata = {
   title: "Redline | Art Direction",
@@ -27,7 +19,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${outfit.variable} ${playfair.variable} antialiased overflow-hidden h-screen w-screen bg-[#fcfcfc] text-zinc-800`}>
+      <body className="antialiased overflow-hidden h-screen w-screen bg-[#fcfcfc] text-zinc-800">
         {children}
       </body>
     </html>
