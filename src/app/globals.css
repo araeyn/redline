@@ -10,14 +10,14 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: var(--font-playfair), serif;
+    font-family: var(--font-newsreader), serif;
     background-image: url("https://www.transparenttextures.com/patterns/felt.png");
   }
 }
 
 @layer utilities {
   .font-serif {
-    font-family: var(--font-playfair), serif;
+    font-family: var(--font-newsreader), serif;
   }
   
   .font-outfit {
@@ -26,7 +26,7 @@
 
   .paper-canvas {
     @apply bg-white shadow-[0_10px_50px_rgba(0,0,0,0.05)] border border-zinc-100;
-    transform: rotate(-0.5deg);
+    /* Rotation removed to fix light source coordinate drift */
   }
   
   .ink-stain {
@@ -54,5 +54,24 @@
 
   .focus-ink {
     @apply outline-none ring-1 ring-zinc-300 border-zinc-400;
+  }
+
+  /* Sophisticated gradient blur for the top bar */
+  .top-blur-mask {
+    mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  }
+
+  /* Layers visualization effects */
+  .layer-silhouette {
+    filter: brightness(0) invert(1) contrast(100);
+    mix-blend-mode: multiply;
+    opacity: 0.1;
+  }
+
+  .layer-gesture {
+    filter: edge-detect(1) contrast(200) invert(1);
+    mix-blend-mode: color-burn;
+    opacity: 0.2;
   }
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Sparkles, Sun, Info, Crosshair, RefreshCcw, Layers, Layout, Brain } from "lucide-react";
+import { Upload, Sparkles, Sun, Info, Crosshair, RefreshCcw, Layers, Layout, Brain, Search, Maximize2, Palette } from "lucide-react";
 import clsx from "clsx";
 import { analyzeImage } from "@/lib/gemini";
 
@@ -26,9 +26,8 @@ export default function Workspace() {
   const [tab, setTab] = useState<"critique" | "relight" | "materials" | "layers">("critique");
   
   const [critiques, setCritiques] = useState<Critique[]>([]);
-  const [critiqueStatus, setCritiqueStatus] = useState<"idle" | "loading" | "done">("idle");
-  const [relightStatus, setRelightStatus] = useState<"idle" | "loading" | "done">("idle");
-  const [materialStatus, setMaterialStatus] = useState<"idle" | "loading" | "done">("idle");
+  const [displayedCritiques, setDisplayedCritiques] = useState<Critique[]>([]);
+  const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
   const [sunPos, setSunPos] = useState({ x: 0, y: 0 });
   
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -38,29 +37,31 @@ export default function Workspace() {
     const sig = Math.floor(Math.random() * 1000000);
     setImage(`${baseUrl}?auto=format&fit=crop&w=1200&q=80&sig=${sig}`);
     setCritiques([]);
-    setCritiqueStatus("idle");
-    setRelightStatus("idle");
-    setMaterialStatus("idle");
+    setDisplayedCritiques([]);
+    setStatus("idle");
   };
 
   const handleCritique = async () => {
     if (!image) return;
-    setCritiqueStatus("loading");
+    setStatus("loading");
+    setDisplayedCritiques([]);
     const result = await analyzeImage(image);
     if (result && result.critiques) {
       setCritiques(result.critiques);
+      // Stream points one by one
+      let current = 0;
+      const interval = setInterval(() => {
+        if (current < result.critiques.length) {
+          setDisplayedCritiques(prev => [...prev, result.critiques[current]]);
+          current++;
+        } else {
+          clearInterval(interval);
+          setStatus("done");
+        }
+      }, 400);
+    } else {
+      setStatus("done");
     }
-    setCritiqueStatus("done");
-  };
-
-  const handleRelight = () => {
-    setRelightStatus("loading");
-    setTimeout(() => setRelightStatus("done"), 2000);
-  };
-
-  const handleAnalyzeMaterials = () => {
-    setMaterialStatus("loading");
-    setTimeout(() => setMaterialStatus("done"), 2000);
   };
 
   const getLightingPrompt = () => {
@@ -87,13 +88,13 @@ export default function Workspace() {
           {...blurFade}
           className="w-full max-w-xl aspect-[1.4] border border-zinc-200 rounded-lg flex flex-col items-center justify-center bg-white shadow-sm"
         >
-          <h2 className="text-5xl font-bold text-zinc-800 mb-2 tracking-tighter italic">Redline</h2>
-          <p className="text-zinc-400 text-xl mb-12 max-w-xs text-center leading-relaxed font-serif">
-            Art direction for the analog-digital hybrid.
+          <h2 className="text-5xl font-bold text-zinc-800 mb-2 tracking-tighter italic font-serif">Redline</h2>
+          <p className="text-zinc-400 text-xl mb-12 max-w-xs text-center leading-relaxed font-serif italic">
+            Professional art direction for digital creators.
           </p>
           <button 
             onClick={loadRandomImage}
-            className="px-14 py-4 bg-zinc-900 text-white font-bold rounded-full transition-all hover:bg-black active:opacity-90 shadow-lg text-lg tracking-tight"
+            className="px-14 py-4 bg-zinc-900 text-white font-bold rounded-full transition-all hover:bg-black active:opacity-90 shadow-lg text-lg tracking-tight font-outfit"
           >
             Open Sketchbook
           </button>
@@ -104,6 +105,9 @@ export default function Workspace() {
 
   return (
     <div className="flex-1 flex overflow-hidden bg-[#fcfcfc] relative">
+      {/* Sidebar Top Gradient Blur Overlay */}
+      <div className="absolute top-0 right-0 w-[420px] h-32 z-30 pointer-events-none bg-[#fcfcfc] top-blur-mask backdrop-blur-sm opacity-80" />
+
       <div className="flex-1 relative flex items-center justify-center p-12 overflow-visible">
         <div 
           ref={canvasRef}
@@ -116,44 +120,68 @@ export default function Workspace() {
               src={image} 
               alt="WIP Sketch" 
               className={clsx(
-                "max-h-[75vh] w-auto block object-contain grayscale-[0.2] transition-all duration-1000",
-                relightStatus === "done" && tab === "relight" ? "brightness-110 contrast-125 saturate-110" : "brightness-100 contrast-100"
+                "max-h-[75vh] w-auto block object-contain grayscale-[0.2] transition-all duration-700",
+                tab === "relight" ? "brightness-90 contrast-110" : "brightness-100 contrast-100"
               )}
+              style={{
+                filter: tab === "relight" 
+                  ? `brightness(${1 - Math.abs(sunPos.y/1000)}) contrast(${1.1 + Math.abs(sunPos.x/1000)})`
+                  : 'none',
+              }}
             />
 
             <AnimatePresence>
-              {tab === "materials" && materialStatus === "done" && (
+              {tab === "relight" && (
                 <motion.div
-                  initial={{ opacity: 0, filter: "blur(20px)" }}
-                  animate={{ opacity: 0.2, filter: "blur(0px)" }}
-                  exit={{ opacity: 0, filter: "blur(20px)" }}
-                  className="absolute inset-0 z-20 pointer-events-none mix-blend-multiply"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.4 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-10 pointer-events-none mix-blend-soft-light"
                   style={{
-                    background: "radial-gradient(circle at 30% 20%, rgba(239,68,68,0.4) 0%, transparent 40%), radial-gradient(circle at 70% 60%, rgba(59,130,246,0.4) 0%, transparent 40%)"
+                    background: `radial-gradient(circle at ${50 + (sunPos.x / 5)}% ${50 + (sunPos.y / 5)}%, rgba(255,255,255,0.8) 0%, transparent 60%)`,
                   }}
                 />
               )}
+            </AnimatePresence>
+
+            <AnimatePresence>
               {tab === "layers" && (
                 <motion.div
                   initial={{ opacity: 0, filter: "blur(15px)" }}
                   animate={{ opacity: 1, filter: "blur(0px)" }}
                   exit={{ opacity: 0, filter: "blur(15px)" }}
-                  className="absolute inset-0 z-20 pointer-events-none opacity-10"
+                  className="absolute inset-0 z-20 pointer-events-none"
                 >
-                   <div className="grid grid-cols-3 grid-rows-3 w-full h-full">
-                      {[...Array(9)].map((_, i) => <div key={i} className="border border-zinc-900" />)}
+                   <div className="absolute inset-0 layer-gesture bg-red-500/5" />
+                   <div className="grid grid-cols-3 grid-rows-3 w-full h-full opacity-30">
+                      {[...Array(9)].map((_, i) => <div key={i} className="border border-red-900/40 border-dashed" />)}
                    </div>
+                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 border-2 border-red-500/10 rounded-full scale-110 opacity-40 blur-[1px]" />
                 </motion.div>
+              )}
+              {tab === "materials" && (
+                <motion.div
+                  initial={{ opacity: 0, filter: "blur(20px)" }}
+                  animate={{ opacity: 0.3, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, filter: "blur(20px)" }}
+                  className="absolute inset-0 z-20 pointer-events-none mix-blend-multiply rounded-xl overflow-hidden"
+                  style={{
+                    background: `
+                      radial-gradient(circle at 30% 20%, #ff4d4d 0%, transparent 40%),
+                      radial-gradient(circle at 70% 60%, #4da6ff 0%, transparent 40%),
+                      radial-gradient(circle at 50% 40%, #ffcc00 0%, transparent 30%)
+                    `,
+                    filter: 'contrast(1.5) saturate(2)'
+                  }}
+                />
               )}
             </AnimatePresence>
 
-            <div className="absolute inset-0 z-30 pointer-events-none overflow-visible">
+            <div className="absolute inset-0 z-40 pointer-events-none overflow-visible">
               <AnimatePresence>
-                {tab === "critique" && critiqueStatus === "done" && (
-                  critiques.map((dot, i) => (
-                    <RedlineMark key={`${image}-${i}`} dot={dot} index={i} />
-                  ))
-                )}
+                {displayedCritiques.map((dot, i) => (
+                  <RedlineMark key={`${image}-${i}`} dot={dot} index={i} />
+                ))}
               </AnimatePresence>
             </div>
           </div>
@@ -166,11 +194,13 @@ export default function Workspace() {
                 exit={{ opacity: 0, filter: "blur(10px)" }}
                 drag
                 dragConstraints={canvasRef}
-                dragElastic={0.1}
+                dragElastic={0}
                 onDrag={(_, info) => setSunPos({ x: info.offset.x, y: info.offset.y })}
-                className="absolute top-1/2 left-1/2 w-12 h-12 -mt-6 -ml-6 bg-white border-2 border-zinc-200 rounded-full cursor-grab active:cursor-grabbing shadow-lg flex items-center justify-center z-40"
+                className="absolute top-1/2 left-1/2 w-14 h-14 -mt-7 -ml-7 bg-white border-2 border-zinc-200 rounded-full cursor-grab active:cursor-grabbing shadow-2xl flex items-center justify-center z-50 transition-shadow hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]"
               >
-                <Sun className="text-zinc-400" size={24} />
+                <div className="w-10 h-10 rounded-full bg-yellow-400/5 flex items-center justify-center">
+                  <Sun className="text-yellow-600/60" size={24} />
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -180,82 +210,120 @@ export default function Workspace() {
       <motion.div 
         initial={{ x: 400 }}
         animate={{ x: 0 }}
-        className="w-[420px] bg-white border-l border-zinc-200 flex flex-col z-20"
+        className="w-[420px] bg-white border-l border-zinc-200 flex flex-col z-40 relative overflow-hidden shadow-[-20px_0_60px_rgba(0,0,0,0.02)]"
       >
-        <div className="p-10 border-b border-zinc-100">
-          <h1 className="text-4xl font-bold text-zinc-900 tracking-tighter mb-2">Director's Ledger</h1>
-          <p className="text-zinc-400 text-lg italic leading-tight font-serif">Observations on structural integrity.</p>
+        <div className="p-10 border-b border-zinc-100 bg-white/50 backdrop-blur-md relative z-10">
+          <h1 className="text-4xl font-bold text-zinc-900 tracking-tighter mb-2 font-serif">Director's Ledger</h1>
+          <p className="text-zinc-400 text-lg italic leading-tight font-serif italic">Observations on structural integrity.</p>
         </div>
 
-        <div className="flex p-2 gap-1 border-b border-zinc-50 bg-[#fafafa] overflow-x-auto no-scrollbar">
-          <button onClick={() => setTab("critique")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all", tab === "critique" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Critique</button>
-          <button onClick={() => setTab("relight")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all", tab === "relight" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Relight</button>
-          <button onClick={() => setTab("materials")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all", tab === "materials" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Surfaces</button>
-          <button onClick={() => setTab("layers")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all", tab === "layers" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Layers</button>
+        <div className="flex p-2 gap-1 border-b border-zinc-50 bg-[#fafafa] overflow-x-auto no-scrollbar relative z-10">
+          <button onClick={() => setTab("critique")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all shrink-0 font-outfit", tab === "critique" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Critique</button>
+          <button onClick={() => setTab("relight")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all shrink-0 font-outfit", tab === "relight" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Relight</button>
+          <button onClick={() => setTab("materials")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all shrink-0 font-outfit", tab === "materials" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Surfaces</button>
+          <button onClick={() => setTab("layers")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all shrink-0 font-outfit", tab === "layers" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Layers</button>
         </div>
 
-        <div className="flex-1 p-10 overflow-y-auto">
+        <div className="flex-1 p-10 overflow-y-auto relative z-10">
           {tab === "critique" ? (
             <div className="space-y-10">
               <div className="space-y-3">
-                <h3 className="text-lg font-bold text-zinc-900 uppercase tracking-widest">Art Director</h3>
-                <p className="text-zinc-500 font-serif text-xl leading-snug italic italic">"Identify the rhythm of the gesture before the weight of the shadow."</p>
+                <h3 className="text-lg font-bold text-zinc-900 uppercase tracking-widest font-outfit">Art Director</h3>
+                <p className="text-zinc-500 font-serif text-xl leading-snug italic">"Identify the rhythm of the gesture before the weight of the shadow."</p>
               </div>
-              {critiqueStatus === "idle" && (
-                <button onClick={handleCritique} className="w-full py-5 bg-zinc-900 text-white font-bold rounded-xl shadow-xl transition-all active:opacity-80 text-lg">Analyze Piece</button>
+              {status === "idle" && (
+                <button onClick={handleCritique} className="w-full py-5 bg-zinc-900 text-white font-bold rounded-xl shadow-xl transition-all active:opacity-80 text-lg font-outfit">Analyze Piece</button>
               )}
-              {critiqueStatus === "loading" && (
+              {status === "loading" && (
                 <div className="py-12 flex flex-col items-center justify-center gap-6">
                   <div className="w-10 h-10 border-2 border-zinc-200 border-t-red-700 rounded-full animate-spin" />
-                  <span className="text-xs text-zinc-400 font-bold uppercase tracking-[0.4em]">Observing...</span>
+                  <span className="text-xs text-zinc-400 font-bold uppercase tracking-[0.4em] font-outfit">Observing...</span>
                 </div>
               )}
-              {critiqueStatus === "done" && (
+              {(status === "done" || displayedCritiques.length > 0) && (
                 <motion.div {...blurFade} className="space-y-8">
-                  <div className="p-8 border border-zinc-100 bg-zinc-50/50 rounded-2xl">
-                    <p className="text-zinc-600 text-lg font-serif italic italic">The system has identified key areas for refinement. Note the red markings on the canvas.</p>
+                  <div className="p-8 border border-zinc-100 bg-zinc-50/50 rounded-2xl text-center">
+                    <p className="text-zinc-600 text-lg font-serif italic">Mapped {displayedCritiques.length} structural markings.</p>
                   </div>
                   <div className="space-y-4">
-                    {critiques.map((c, i) => (
-                      <div key={i} className="p-4 border-b border-zinc-50">
-                        <span className="text-[10px] font-bold text-red-700 uppercase tracking-widest block mb-1">Point {i + 1}</span>
-                        <span className="text-xl font-bold text-zinc-800 tracking-tight">{c.title}</span>
+                    {displayedCritiques.map((c, i) => (
+                      <div key={i} className="p-4 border-b border-zinc-50 flex items-center justify-between group cursor-default">
+                        <div>
+                          <span className="text-[10px] font-bold text-red-700 uppercase tracking-widest block mb-1 font-outfit">Point {i + 1}</span>
+                          <span className="text-xl font-bold text-zinc-800 tracking-tight font-serif">{c.title}</span>
+                        </div>
+                        <Search size={16} className="text-zinc-300 group-hover:text-red-500 transition-colors" />
                       </div>
                     ))}
                   </div>
-                  <button onClick={() => setCritiqueStatus("idle")} className="w-full py-4 border border-zinc-200 text-zinc-400 font-bold rounded-xl transition-all text-xs uppercase tracking-widest">Reset Analysis</button>
+                  {status === "done" && (
+                    <button onClick={() => {setStatus("idle"); setDisplayedCritiques([])}} className="w-full py-4 border border-zinc-200 text-zinc-400 font-bold rounded-xl transition-all text-xs uppercase tracking-widest font-outfit">Reset Analysis</button>
+                  )}
                 </motion.div>
               )}
             </div>
           ) : tab === "relight" ? (
             <div className="space-y-10">
               <div className="space-y-3">
-                <h3 className="text-lg font-bold text-zinc-900 uppercase tracking-widest">Light Engine</h3>
-                <p className="text-zinc-500 font-serif text-xl leading-snug italic italic">Simulate volume and depth via structural lighting.</p>
+                <h3 className="text-lg font-bold text-zinc-900 uppercase tracking-widest font-outfit">Light Engine</h3>
+                <p className="text-zinc-500 font-serif text-xl leading-snug italic">Simulate volume and depth via dynamic structural lighting.</p>
               </div>
-              <div className="p-6 border border-zinc-100 bg-zinc-50 rounded-xl font-mono text-sm text-zinc-800">{getLightingPrompt()}</div>
-              {relightStatus === "idle" && (
-                <button onClick={handleRelight} className="w-full py-5 bg-zinc-900 text-white font-bold rounded-xl shadow-xl transition-all active:opacity-80 text-lg tracking-tight">Apply Engine</button>
-              )}
-              {relightStatus === "loading" && (
-                <div className="py-12 flex flex-col items-center justify-center gap-6 animate-pulse">
-                  <span className="text-xs text-zinc-400 font-bold uppercase tracking-[0.4em]">Calculating...</span>
+              <div className="p-8 border border-zinc-100 bg-zinc-50/50 rounded-2xl text-center">
+                <p className="text-zinc-600 text-sm font-medium leading-relaxed font-serif italic">Move the light source on the canvas to recalculate core shadows and ambient occlusion.</p>
+              </div>
+              <div className="p-6 border border-zinc-100 bg-zinc-50 rounded-xl flex items-center justify-center gap-4">
+                 <Palette size={20} className="text-zinc-300" />
+                 <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest font-outfit">Calculated Volume Active</span>
+              </div>
+            </div>
+          ) : tab === "materials" ? (
+            <div className="space-y-10">
+              <div className="space-y-3">
+                <h3 className="text-lg font-bold text-zinc-900 uppercase tracking-widest font-outfit">Surface Scanner</h3>
+                <p className="text-zinc-500 font-serif text-xl leading-snug italic">Determine physical properties and sub-surface scattering estimates.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-5 border border-zinc-100 bg-zinc-50/50 rounded-xl">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1 font-outfit">Roughness</span>
+                  <span className="text-2xl font-bold text-zinc-800 font-serif">0.42</span>
                 </div>
-              )}
-              {relightStatus === "done" && (
-                <button onClick={() => setRelightStatus("idle")} className="w-full py-4 border border-zinc-200 text-zinc-400 font-bold rounded-xl transition-all text-xs uppercase tracking-widest">Adjust Source</button>
-              )}
+                <div className="p-5 border border-zinc-100 bg-zinc-50/50 rounded-xl">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1 font-outfit">Metallic</span>
+                  <span className="text-2xl font-bold text-zinc-800 font-serif">0.08</span>
+                </div>
+              </div>
+              <div className="p-6 border border-zinc-100 bg-zinc-50/50 rounded-2xl text-center">
+                <p className="text-zinc-600 text-sm font-medium italic font-serif">Surface heat-map active. Review highlighted zones for texture consistency.</p>
+              </div>
             </div>
           ) : (
-            <div className="py-20 text-center space-y-4">
-               <Layers className="mx-auto text-zinc-200" size={32} strokeWidth={1} />
-               <p className="text-sm text-zinc-400 font-serif italic italic">Specialized structural tools currently locked in dev mode.</p>
+            <div className="space-y-10">
+              <div className="space-y-3">
+                <h3 className="text-lg font-bold text-zinc-900 uppercase tracking-widest font-outfit">Layer Explorer</h3>
+                <p className="text-zinc-500 font-serif text-xl leading-snug italic">Deconstruct composition into foundational elements.</p>
+              </div>
+              <div className="space-y-4">
+                {[
+                  { name: "Composition Grid", status: "Thirds", icon: Layout },
+                  { name: "Focus Planes", status: "Golden", icon: Maximize2 },
+                  { name: "Gesture Rhythm", status: "Calculated", icon: Brain },
+                ].map((item, i) => (
+                  <div key={i} className="p-5 border border-zinc-100 bg-zinc-50/50 rounded-xl flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                      <item.icon size={18} className="text-zinc-400" />
+                      <span className="text-sm font-bold text-zinc-700 font-outfit">{item.name}</span>
+                    </div>
+                    <span className="text-xs font-bold text-red-700 uppercase tracking-widest font-outfit">{item.status}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-zinc-400 text-sm font-serif italic text-center px-4 leading-relaxed">Structural guides assist in identifying stagnation in the silhouette and gesture.</p>
             </div>
           )}
         </div>
         
-        <div className="p-10 bg-zinc-50/30 border-t border-zinc-100">
-           <button onClick={loadRandomImage} className="w-full py-4 bg-white text-zinc-900 font-bold rounded-xl transition-all border border-zinc-200 shadow-sm hover:shadow-md text-lg tracking-tight font-sans">Next Canvas</button>
+        <div className="p-10 bg-zinc-50/30 border-t border-zinc-100 relative z-10">
+           <button onClick={loadRandomImage} className="w-full py-4 bg-white text-zinc-900 font-bold rounded-xl transition-all border border-zinc-200 shadow-sm hover:shadow-md text-lg tracking-tight font-outfit active:opacity-80">Next Canvas</button>
         </div>
       </motion.div>
     </div>
@@ -275,16 +343,18 @@ function RedlineMark({ dot, index }: { dot: Critique; index: number }) {
     <motion.div
       initial={{ opacity: 0, filter: "blur(10px)" }}
       animate={{ opacity: 1, filter: "blur(0px)" }}
-      transition={{ delay: index * 0.15 + 0.5, duration: 0.8 }}
-      className="absolute z-30 pointer-events-auto"
+      transition={{ duration: 0.8, ease: "easeOut" }}
+      className="absolute z-40 pointer-events-auto"
       style={{ left: `${dot.x}%`, top: `${dot.y}%` }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => setIsHovered(!isHovered)}
     >
       <div className="relative flex items-center justify-center cursor-pointer group">
-        <div className="text-red-700/90 font-bold text-3xl select-none leading-none -mt-4 opacity-80 hover:opacity-100 transition-opacity">✕</div>
-        <div className="absolute w-12 h-12 bg-red-700/5 rounded-full blur-2xl animate-pulse" />
+        <div className="w-6 h-6 flex items-center justify-center">
+          <div className="absolute inset-0 bg-red-600/30 rounded-full animate-ping opacity-50" />
+          <div className="w-3.5 h-3.5 bg-red-600 rounded-full border-2 border-white shadow-[0_0_15px_rgba(220,38,38,0.6)] group-hover:scale-125 transition-transform" />
+        </div>
       </div>
       <AnimatePresence>
         {isHovered && (
@@ -293,10 +363,15 @@ function RedlineMark({ dot, index }: { dot: Critique; index: number }) {
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: initialY, filter: "blur(12px)" }}
             transition={{ duration: 0.4, ease: "easeOut" }}
-            className={clsx("absolute w-80 bg-white border border-zinc-200 p-10 rounded-sm z-50 shadow-[0_20px_70px_rgba(0,0,0,0.1)] overflow-visible", xPositionClass, yPositionClass)}
+            className={clsx(
+              "absolute w-80 bg-white border border-zinc-200 p-10 rounded-sm shadow-[0_30px_100px_rgba(0,0,0,0.15)] overflow-visible",
+              xPositionClass, 
+              yPositionClass,
+              "z-[100]"
+            )}
             style={{ transform: `rotate(${(index % 2 === 0 ? 1 : -1) * 1.5}deg)` }}
           >
-            <h4 className="text-[10px] font-bold text-red-700 mb-4 uppercase tracking-[0.3em] font-sans">Director's Note</h4>
+            <h4 className="text-[10px] font-bold text-red-700 mb-4 uppercase tracking-[0.3em] font-outfit">Director's Note</h4>
             <p className="text-2xl text-zinc-800 leading-tight italic font-serif">{dot.desc}</p>
           </motion.div>
         )}
