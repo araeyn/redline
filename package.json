@@ -9,6 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@fontsource/playfair-display": "^5.2.8",
+    "@google/generative-ai": "^0.24.1",
+    "@huggingface/inference": "^4.13.15",
     "clsx": "^2.1.1",
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.344.0",

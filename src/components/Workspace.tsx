@@ -1,21 +1,31 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, Sparkles, Sun, Info, Crosshair, RefreshCcw, Layers } from "lucide-react";
+import { Upload, Sparkles, Sun, Info, Crosshair, RefreshCcw, Layers, Layout, Brain } from "lucide-react";
 import clsx from "clsx";
+import { analyzeImage } from "@/lib/gemini";
 
-const MOCK_DOTS = [
-  { x: 40, y: 25, title: "Anatomy Flaw", desc: "The foreshortening on this left arm is structurally flawed." },
-  { x: 65, y: 50, title: "Composition", desc: "Lacks contrast. Deepen shadows to guide the eye." },
-  { x: 30, y: 70, title: "Proportion", desc: "The leg to torso ratio appears slightly elongated." },
-  { x: 80, y: 20, title: "Lighting", desc: "Light source is ambiguous here. Commit to a direction." },
+interface Critique {
+  x: number;
+  y: number;
+  title: string;
+  desc: string;
+}
+
+const SKETCH_URLS = [
+  "https://images.unsplash.com/photo-1513364776144-60967b0f800f",
+  "https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb",
+  "https://images.unsplash.com/photo-1580136579312-94651dfd596d",
+  "https://images.unsplash.com/photo-1614850523296-d8c1af93d400",
+  "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5",
 ];
 
 export default function Workspace() {
   const [image, setImage] = useState<string | null>(null);
-  const [tab, setTab] = useState<"critique" | "relight" | "materials">("critique");
+  const [tab, setTab] = useState<"critique" | "relight" | "materials" | "layers">("critique");
   
+  const [critiques, setCritiques] = useState<Critique[]>([]);
   const [critiqueStatus, setCritiqueStatus] = useState<"idle" | "loading" | "done">("idle");
   const [relightStatus, setRelightStatus] = useState<"idle" | "loading" | "done">("idle");
   const [materialStatus, setMaterialStatus] = useState<"idle" | "loading" | "done">("idle");
@@ -23,25 +33,34 @@ export default function Workspace() {
   
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  const handleCritique = () => {
+  const loadRandomImage = () => {
+    const baseUrl = SKETCH_URLS[Math.floor(Math.random() * SKETCH_URLS.length)];
+    const sig = Math.floor(Math.random() * 1000000);
+    setImage(`${baseUrl}?auto=format&fit=crop&w=1200&q=80&sig=${sig}`);
+    setCritiques([]);
+    setCritiqueStatus("idle");
+    setRelightStatus("idle");
+    setMaterialStatus("idle");
+  };
+
+  const handleCritique = async () => {
+    if (!image) return;
     setCritiqueStatus("loading");
-    setTimeout(() => {
-      setCritiqueStatus("done");
-    }, 2000);
+    const result = await analyzeImage(image);
+    if (result && result.critiques) {
+      setCritiques(result.critiques);
+    }
+    setCritiqueStatus("done");
   };
 
   const handleRelight = () => {
     setRelightStatus("loading");
-    setTimeout(() => {
-      setRelightStatus("done");
-    }, 3000);
+    setTimeout(() => setRelightStatus("done"), 2000);
   };
 
   const handleAnalyzeMaterials = () => {
     setMaterialStatus("loading");
-    setTimeout(() => {
-      setMaterialStatus("done");
-    }, 2500);
+    setTimeout(() => setMaterialStatus("done"), 2000);
   };
 
   const getLightingPrompt = () => {
@@ -54,82 +73,85 @@ export default function Workspace() {
     return `Dramatic rim lighting from ${vertical} ${horizontal}.`;
   };
 
+  const blurFade = {
+    initial: { opacity: 0, filter: "blur(12px)" },
+    animate: { opacity: 1, filter: "blur(0px)" },
+    exit: { opacity: 0, filter: "blur(12px)" },
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] }
+  };
+
   if (!image) {
     return (
-      <div className="flex-1 flex items-center justify-center p-6 bg-zinc-950 bg-mesh relative overflow-hidden">
-        <div className="absolute top-1/2 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-600/10 rounded-full blur-[150px] pointer-events-none" />
-        <div className="absolute top-1/2 right-1/4 translate-x-1/4 -translate-y-1/2 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[150px] pointer-events-none" />
-        
+      <div className="flex-1 flex items-center justify-center p-10 bg-[#fcfcfc]">
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-3xl aspect-[16/10] border border-white/10 rounded-3xl flex flex-col items-center justify-center glass hover:bg-zinc-900/50 hover:border-white/20 transition-all cursor-pointer group z-10 relative overflow-hidden shadow-2xl"
+          {...blurFade}
+          className="w-full max-w-xl aspect-[1.4] border border-zinc-200 rounded-lg flex flex-col items-center justify-center bg-white shadow-sm"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/40 group-hover:opacity-100 opacity-50 transition-opacity" />
-          <Upload className="text-zinc-500 mb-6 group-hover:text-red-400 transition-colors duration-500 transform group-hover:-translate-y-2 group-hover:scale-110 drop-shadow-lg" size={56} />
-          <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-zinc-100 to-zinc-500 mb-3 tracking-tight">Drop your WIP sketch here</h2>
-          <p className="text-zinc-400 font-medium mb-8">JPG, PNG, or WEBP up to 20MB</p>
-          
-          <div className="flex items-center gap-4 z-20">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setImage("https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb?auto=format&fit=crop&w=1200&q=80");
-              }}
-              className="px-8 py-3.5 bg-zinc-100 hover:bg-white text-zinc-950 font-bold rounded-2xl transition-all active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.4)]"
-            >
-              Load Demo Sketch
-            </button>
-          </div>
+          <h2 className="text-5xl font-bold text-zinc-800 mb-2 tracking-tighter italic">Redline</h2>
+          <p className="text-zinc-400 text-xl mb-12 max-w-xs text-center leading-relaxed font-serif">
+            Art direction for the analog-digital hybrid.
+          </p>
+          <button 
+            onClick={loadRandomImage}
+            className="px-14 py-4 bg-zinc-900 text-white font-bold rounded-full transition-all hover:bg-black active:opacity-90 shadow-lg text-lg tracking-tight"
+          >
+            Open Sketchbook
+          </button>
         </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-zinc-950 bg-mesh relative">
-      <div className="flex-1 relative flex items-center justify-center p-8 overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none" />
-
+    <div className="flex-1 flex overflow-hidden bg-[#fcfcfc] relative">
+      <div className="flex-1 relative flex items-center justify-center p-12 overflow-visible">
         <div 
           ref={canvasRef}
-          className="relative rounded-2xl shadow-2xl ring-1 ring-white/10 flex items-center justify-center z-10 bg-zinc-950/50 backdrop-blur-sm overflow-hidden"
+          className="relative paper-canvas bg-white p-4 overflow-visible"
         >
-          <div className="relative inline-block">
+          <div className="relative inline-block overflow-visible border border-zinc-100 shadow-inner p-1">
             <motion.img 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
+              key={image}
+              {...blurFade}
               src={image} 
               alt="WIP Sketch" 
               className={clsx(
-                "max-h-[85vh] w-auto block object-contain rounded-2xl transition-all duration-1000",
-                relightStatus === "done" && tab === "relight" ? "brightness-110 contrast-125 saturate-150" : "brightness-100 contrast-100"
+                "max-h-[75vh] w-auto block object-contain grayscale-[0.2] transition-all duration-1000",
+                relightStatus === "done" && tab === "relight" ? "brightness-110 contrast-125 saturate-110" : "brightness-100 contrast-100"
               )}
-              style={{
-                filter: relightStatus === "done" && tab === "relight" ? 'brightness(1.1) contrast(1.25) drop-shadow(0 0 60px rgba(250,250,250,0.15))' : 'none'
-              }}
             />
 
             <AnimatePresence>
               {tab === "materials" && materialStatus === "done" && (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 z-20 pointer-events-none mix-blend-overlay"
+                  initial={{ opacity: 0, filter: "blur(20px)" }}
+                  animate={{ opacity: 0.2, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, filter: "blur(20px)" }}
+                  className="absolute inset-0 z-20 pointer-events-none mix-blend-multiply"
                   style={{
-                    background: "radial-gradient(circle at 30% 20%, rgba(239,68,68,0.4) 0%, transparent 40%), radial-gradient(circle at 70% 60%, rgba(59,130,246,0.4) 0%, transparent 40%), radial-gradient(circle at 50% 50%, rgba(168,85,247,0.4) 0%, transparent 60%)"
+                    background: "radial-gradient(circle at 30% 20%, rgba(239,68,68,0.4) 0%, transparent 40%), radial-gradient(circle at 70% 60%, rgba(59,130,246,0.4) 0%, transparent 40%)"
                   }}
                 />
               )}
+              {tab === "layers" && (
+                <motion.div
+                  initial={{ opacity: 0, filter: "blur(15px)" }}
+                  animate={{ opacity: 1, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, filter: "blur(15px)" }}
+                  className="absolute inset-0 z-20 pointer-events-none opacity-10"
+                >
+                   <div className="grid grid-cols-3 grid-rows-3 w-full h-full">
+                      {[...Array(9)].map((_, i) => <div key={i} className="border border-zinc-900" />)}
+                   </div>
+                </motion.div>
+              )}
             </AnimatePresence>
 
-            <div className="absolute inset-0 z-30 pointer-events-none">
+            <div className="absolute inset-0 z-30 pointer-events-none overflow-visible">
               <AnimatePresence>
                 {tab === "critique" && critiqueStatus === "done" && (
-                  MOCK_DOTS.map((dot, i) => (
-                    <CritiqueDot key={i} dot={dot} index={i} />
+                  critiques.map((dot, i) => (
+                    <RedlineMark key={`${image}-${i}`} dot={dot} index={i} />
                   ))
                 )}
               </AnimatePresence>
@@ -139,16 +161,16 @@ export default function Workspace() {
           <AnimatePresence>
             {tab === "relight" && (
               <motion.div
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0 }}
+                initial={{ opacity: 0, filter: "blur(10px)" }}
+                animate={{ opacity: 1, filter: "blur(0px)" }}
+                exit={{ opacity: 0, filter: "blur(10px)" }}
                 drag
                 dragConstraints={canvasRef}
                 dragElastic={0.1}
                 onDrag={(_, info) => setSunPos({ x: info.offset.x, y: info.offset.y })}
-                className="absolute top-1/2 left-1/2 w-16 h-16 -mt-8 -ml-8 bg-gradient-to-br from-yellow-200 to-amber-500 rounded-full cursor-grab active:cursor-grabbing shadow-[0_0_60px_rgba(245,158,11,0.8)] flex items-center justify-center z-40 border-2 border-white/20"
+                className="absolute top-1/2 left-1/2 w-12 h-12 -mt-6 -ml-6 bg-white border-2 border-zinc-200 rounded-full cursor-grab active:cursor-grabbing shadow-lg flex items-center justify-center z-40"
               >
-                <Sun className="text-amber-900" size={32} />
+                <Sun className="text-zinc-400" size={24} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -158,249 +180,102 @@ export default function Workspace() {
       <motion.div 
         initial={{ x: 400 }}
         animate={{ x: 0 }}
-        transition={{ type: "spring", stiffness: 200, damping: 25 }}
-        className="w-[420px] glass-panel flex flex-col z-20 relative overflow-hidden"
+        className="w-[420px] bg-white border-l border-zinc-200 flex flex-col z-20"
       >
-        <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-red-500/10 blur-[100px] pointer-events-none" />
-
-        <div className="flex p-5 gap-2 border-b border-white/5 relative z-10 bg-black/20 overflow-x-auto no-scrollbar">
-          <button 
-            onClick={() => setTab("critique")}
-            className={clsx(
-              "flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0",
-              tab === "critique" ? "bg-white/10 text-white shadow-lg border border-white/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5 border border-transparent"
-            )}
-          >
-            <Crosshair size={14} /> Critique
-          </button>
-          <button 
-            onClick={() => setTab("relight")}
-            className={clsx(
-              "flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0",
-              tab === "relight" ? "bg-white/10 text-white shadow-lg border border-white/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5 border border-transparent"
-            )}
-          >
-            <Sun size={14} /> Relight
-          </button>
-          <button 
-            onClick={() => setTab("materials")}
-            className={clsx(
-              "flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0",
-              tab === "materials" ? "bg-white/10 text-white shadow-lg border border-white/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5 border border-transparent"
-            )}
-          >
-            <Layers size={14} /> Materials
-          </button>
+        <div className="p-10 border-b border-zinc-100">
+          <h1 className="text-4xl font-bold text-zinc-900 tracking-tighter mb-2">Director's Ledger</h1>
+          <p className="text-zinc-400 text-lg italic leading-tight font-serif">Observations on structural integrity.</p>
         </div>
 
-        <div className="flex-1 p-6 overflow-y-auto relative z-10">
+        <div className="flex p-2 gap-1 border-b border-zinc-50 bg-[#fafafa] overflow-x-auto no-scrollbar">
+          <button onClick={() => setTab("critique")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all", tab === "critique" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Critique</button>
+          <button onClick={() => setTab("relight")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all", tab === "relight" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Relight</button>
+          <button onClick={() => setTab("materials")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all", tab === "materials" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Surfaces</button>
+          <button onClick={() => setTab("layers")} className={clsx("flex-1 py-2 px-3 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all", tab === "layers" ? "bg-white text-zinc-900 shadow-sm border border-zinc-200" : "text-zinc-400")}>Layers</button>
+        </div>
+
+        <div className="flex-1 p-10 overflow-y-auto">
           {tab === "critique" ? (
-            <div className="space-y-8">
-              <div>
-                <h3 className="text-2xl font-bold text-zinc-50 flex items-center gap-2 mb-3">
-                  <Sparkles className="text-red-500" size={24} />
-                  Spatial Critique
-                </h3>
-                <p className="text-sm text-zinc-400 leading-relaxed font-medium">
-                  The Anatomy Mentor uses advanced vision models to analyze structural flaws, composition, and proportion in your WIP sketch.
-                </p>
+            <div className="space-y-10">
+              <div className="space-y-3">
+                <h3 className="text-lg font-bold text-zinc-900 uppercase tracking-widest">Art Director</h3>
+                <p className="text-zinc-500 font-serif text-xl leading-snug italic italic">"Identify the rhythm of the gesture before the weight of the shadow."</p>
               </div>
-
               {critiqueStatus === "idle" && (
-                <button 
-                  onClick={handleCritique}
-                  className="w-full py-4 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold rounded-2xl shadow-[0_0_30px_rgba(239,68,68,0.3)] transition-all active:scale-[0.98] flex items-center justify-center gap-3 group relative overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent)] -translate-x-[150%] group-hover:translate-x-[150%] transition-transform duration-1000 ease-in-out" />
-                  <Sparkles className="group-hover:rotate-12 transition-transform" size={20} />
-                  Generate AI Redline
-                </button>
+                <button onClick={handleCritique} className="w-full py-5 bg-zinc-900 text-white font-bold rounded-xl shadow-xl transition-all active:opacity-80 text-lg">Analyze Piece</button>
               )}
-
               {critiqueStatus === "loading" && (
-                <div className="w-full py-10 border border-white/10 rounded-2xl bg-black/40 flex flex-col items-center justify-center gap-5 backdrop-blur-md shadow-inner">
-                  <div className="w-10 h-10 border-4 border-white/10 border-t-red-500 rounded-full animate-spin shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
-                  <span className="text-sm text-zinc-300 font-bold text-shiny">Running Vision Analysis...</span>
+                <div className="py-12 flex flex-col items-center justify-center gap-6">
+                  <div className="w-10 h-10 border-2 border-zinc-200 border-t-red-700 rounded-full animate-spin" />
+                  <span className="text-xs text-zinc-400 font-bold uppercase tracking-[0.4em]">Observing...</span>
                 </div>
               )}
-
               {critiqueStatus === "done" && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="p-5 rounded-2xl border border-green-500/30 bg-green-500/10 text-green-400 text-sm flex items-start gap-4 backdrop-blur-md shadow-[0_0_30px_rgba(34,197,94,0.1)]">
-                    <Info size={22} className="mt-0.5 shrink-0 text-green-400" />
-                    <div>
-                      <p className="font-bold mb-1 text-base text-green-300">Analysis Complete</p>
-                      <p className="text-green-500/80 font-medium leading-relaxed">Found 4 potential areas for improvement. Hover over the pulsing red dots on the canvas.</p>
-                    </div>
+                <motion.div {...blurFade} className="space-y-8">
+                  <div className="p-8 border border-zinc-100 bg-zinc-50/50 rounded-2xl">
+                    <p className="text-zinc-600 text-lg font-serif italic italic">The system has identified key areas for refinement. Note the red markings on the canvas.</p>
                   </div>
-                  
-                  <button 
-                    onClick={() => setCritiqueStatus("idle")}
-                    className="w-full py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                  >
-                    <RefreshCcw size={16} /> Reset Analysis
-                  </button>
+                  <div className="space-y-4">
+                    {critiques.map((c, i) => (
+                      <div key={i} className="p-4 border-b border-zinc-50">
+                        <span className="text-[10px] font-bold text-red-700 uppercase tracking-widest block mb-1">Point {i + 1}</span>
+                        <span className="text-xl font-bold text-zinc-800 tracking-tight">{c.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => setCritiqueStatus("idle")} className="w-full py-4 border border-zinc-200 text-zinc-400 font-bold rounded-xl transition-all text-xs uppercase tracking-widest">Reset Analysis</button>
                 </motion.div>
               )}
             </div>
           ) : tab === "relight" ? (
-            <div className="space-y-8">
-              <div>
-                <h3 className="text-2xl font-bold text-zinc-50 flex items-center gap-2 mb-3">
-                  <Sun className="text-amber-500" size={24} />
-                  Interactive Relighting
-                </h3>
-                <p className="text-sm text-zinc-400 leading-relaxed font-medium">
-                  Drag the sun icon over the canvas to set a light source. The AI will simulate realistic light bounces on your 2D sketch.
-                </p>
+            <div className="space-y-10">
+              <div className="space-y-3">
+                <h3 className="text-lg font-bold text-zinc-900 uppercase tracking-widest">Light Engine</h3>
+                <p className="text-zinc-500 font-serif text-xl leading-snug italic italic">Simulate volume and depth via structural lighting.</p>
               </div>
-
-              <div className="p-5 rounded-2xl border border-white/10 bg-black/40 shadow-inner backdrop-blur-md">
-                <span className="text-xs font-bold text-amber-500/80 uppercase tracking-widest mb-3 block">Live AI Prompt</span>
-                <p className="text-sm text-zinc-200 font-mono leading-relaxed h-12 flex items-center">
-                  <span className="text-shiny">{getLightingPrompt()}</span>
-                </p>
-              </div>
-
+              <div className="p-6 border border-zinc-100 bg-zinc-50 rounded-xl font-mono text-sm text-zinc-800">{getLightingPrompt()}</div>
               {relightStatus === "idle" && (
-                <button 
-                  onClick={handleRelight}
-                  className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.3)] transition-all active:scale-[0.98] flex items-center justify-center gap-3 group relative overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)] -translate-x-[150%] group-hover:translate-x-[150%] transition-transform duration-1000 ease-in-out" />
-                  <Sparkles size={20} className="text-amber-900" />
-                  Relight Canvas
-                </button>
+                <button onClick={handleRelight} className="w-full py-5 bg-zinc-900 text-white font-bold rounded-xl shadow-xl transition-all active:opacity-80 text-lg tracking-tight">Apply Engine</button>
               )}
-
               {relightStatus === "loading" && (
-                <div className="w-full py-10 border border-white/10 rounded-2xl bg-black/40 flex flex-col items-center justify-center gap-5 backdrop-blur-md shadow-inner">
-                  <div className="w-10 h-10 border-4 border-white/10 border-t-amber-500 rounded-full animate-spin shadow-[0_0_15px_rgba(245,158,11,0.5)]" />
-                  <span className="text-sm text-zinc-300 font-bold text-shiny">Calculating Light Bounce...</span>
+                <div className="py-12 flex flex-col items-center justify-center gap-6 animate-pulse">
+                  <span className="text-xs text-zinc-400 font-bold uppercase tracking-[0.4em]">Calculating...</span>
                 </div>
               )}
-
               {relightStatus === "done" && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="p-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-sm flex items-start gap-4 backdrop-blur-md shadow-[0_0_30px_rgba(245,158,11,0.15)]">
-                    <Sparkles size={22} className="mt-0.5 shrink-0 text-amber-400" />
-                    <div>
-                      <p className="font-bold mb-1 text-base text-amber-300">Relighting Applied</p>
-                      <p className="text-amber-500/80 font-medium leading-relaxed">Previewing simulated lighting. For final quality, export to hi-res.</p>
-                    </div>
-                  </div>
-                  
-                  <button 
-                    onClick={() => setRelightStatus("idle")}
-                    className="w-full py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                  >
-                    <RefreshCcw size={16} /> Adjust Lighting
-                  </button>
-                </motion.div>
+                <button onClick={() => setRelightStatus("idle")} className="w-full py-4 border border-zinc-200 text-zinc-400 font-bold rounded-xl transition-all text-xs uppercase tracking-widest">Adjust Source</button>
               )}
             </div>
           ) : (
-            <div className="space-y-8">
-              <div>
-                <h3 className="text-2xl font-bold text-zinc-50 flex items-center gap-2 mb-3">
-                  <Layers className="text-purple-500" size={24} />
-                  Material Analysis
-                </h3>
-                <p className="text-sm text-zinc-400 leading-relaxed font-medium">
-                  Scan surface textures to determine roughness, metallic values, and sub-surface scattering estimates.
-                </p>
-              </div>
-
-              {materialStatus === "idle" && (
-                <button 
-                  onClick={handleAnalyzeMaterials}
-                  className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-500 hover:to-indigo-400 text-white font-bold rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.3)] transition-all active:scale-[0.98] flex items-center justify-center gap-3 group relative overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent)] -translate-x-[150%] group-hover:translate-x-[150%] transition-transform duration-1000 ease-in-out" />
-                  <Sparkles size={20} />
-                  Analyze Surface Materials
-                </button>
-              )}
-
-              {materialStatus === "loading" && (
-                <div className="w-full py-10 border border-white/10 rounded-2xl bg-black/40 flex flex-col items-center justify-center gap-5 backdrop-blur-md shadow-inner">
-                  <div className="w-10 h-10 border-4 border-white/10 border-t-purple-500 rounded-full animate-spin shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
-                  <span className="text-sm text-zinc-300 font-bold text-shiny">Scanning Texture Maps...</span>
-                </div>
-              )}
-
-              {materialStatus === "done" && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-4"
-                >
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-4 rounded-xl border border-white/5 bg-white/5">
-                      <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Roughness</p>
-                      <p className="text-xl font-bold text-purple-400">0.42</p>
-                    </div>
-                    <div className="p-4 rounded-xl border border-white/5 bg-white/5">
-                      <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Metallic</p>
-                      <p className="text-xl font-bold text-indigo-400">0.08</p>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-xl border border-white/5 bg-white/5">
-                    <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Material Estimate</p>
-                    <p className="text-sm font-bold text-zinc-200">Semi-Matte Synthetic / Organic Mix</p>
-                  </div>
-                  <button 
-                    onClick={() => setMaterialStatus("idle")}
-                    className="w-full py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                  >
-                    <RefreshCcw size={16} /> Re-scan
-                  </button>
-                </motion.div>
-              )}
+            <div className="py-20 text-center space-y-4">
+               <Layers className="mx-auto text-zinc-200" size={32} strokeWidth={1} />
+               <p className="text-sm text-zinc-400 font-serif italic italic">Specialized structural tools currently locked in dev mode.</p>
             </div>
           )}
+        </div>
+        
+        <div className="p-10 bg-zinc-50/30 border-t border-zinc-100">
+           <button onClick={loadRandomImage} className="w-full py-4 bg-white text-zinc-900 font-bold rounded-xl transition-all border border-zinc-200 shadow-sm hover:shadow-md text-lg tracking-tight font-sans">Next Canvas</button>
         </div>
       </motion.div>
     </div>
   );
 }
 
-function CritiqueDot({ dot, index }: { dot: any; index: number }) {
+function RedlineMark({ dot, index }: { dot: Critique; index: number }) {
   const [isHovered, setIsHovered] = useState(false);
-
   const isNearRight = dot.x > 70;
   const isNearLeft = dot.x < 30;
   const isNearTop = dot.y < 30;
-
-  const xPositionClass = isNearRight 
-    ? "right-0 translate-x-4" 
-    : isNearLeft 
-      ? "left-0 -translate-x-4" 
-      : "left-1/2 -translate-x-1/2";
-
-  const yPositionClass = isNearTop 
-    ? "top-10" 
-    : "bottom-10";
-
-  const originClass = isNearTop
-    ? (isNearRight ? "origin-top-right" : isNearLeft ? "origin-top-left" : "origin-top")
-    : (isNearRight ? "origin-bottom-right" : isNearLeft ? "origin-bottom-left" : "origin-bottom");
-
-  const initialY = isNearTop ? -15 : 15;
+  const xPositionClass = isNearRight ? "right-0 translate-x-4" : isNearLeft ? "left-0 -translate-x-4" : "left-1/2 -translate-x-1/2";
+  const yPositionClass = isNearTop ? "top-12" : "bottom-12";
+  const initialY = isNearTop ? -10 : 10;
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: index * 0.2, type: "spring", stiffness: 300 }}
+      initial={{ opacity: 0, filter: "blur(10px)" }}
+      animate={{ opacity: 1, filter: "blur(0px)" }}
+      transition={{ delay: index * 0.15 + 0.5, duration: 0.8 }}
       className="absolute z-30 pointer-events-auto"
       style={{ left: `${dot.x}%`, top: `${dot.y}%` }}
       onMouseEnter={() => setIsHovered(true)}
@@ -408,40 +283,21 @@ function CritiqueDot({ dot, index }: { dot: any; index: number }) {
       onClick={() => setIsHovered(!isHovered)}
     >
       <div className="relative flex items-center justify-center cursor-pointer group">
-        <div className="absolute w-8 h-8 bg-red-500/40 rounded-full pulse-ring group-hover:bg-red-400/50 transition-colors" />
-        <div className="w-4 h-4 bg-red-500 rounded-full shadow-[0_0_15px_rgba(239,68,68,1)] border-2 border-white/40 z-10 group-hover:scale-125 transition-transform" />
+        <div className="text-red-700/90 font-bold text-3xl select-none leading-none -mt-4 opacity-80 hover:opacity-100 transition-opacity">✕</div>
+        <div className="absolute w-12 h-12 bg-red-700/5 rounded-full blur-2xl animate-pulse" />
       </div>
-
       <AnimatePresence>
         {isHovered && (
           <motion.div
-            initial={{ opacity: 0, y: initialY, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: initialY, scale: 0.95 }}
-            className={`absolute ${xPositionClass} ${yPositionClass} ${originClass} w-72 glass p-[1px] rounded-2xl z-50 shadow-[0_30px_60px_rgba(0,0,0,0.8)] overflow-hidden`}
+            initial={{ opacity: 0, y: initialY, filter: "blur(12px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: initialY, filter: "blur(12px)" }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className={clsx("absolute w-80 bg-white border border-zinc-200 p-10 rounded-sm z-50 shadow-[0_20px_70px_rgba(0,0,0,0.1)] overflow-visible", xPositionClass, yPositionClass)}
+            style={{ transform: `rotate(${(index % 2 === 0 ? 1 : -1) * 1.5}deg)` }}
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 via-zinc-900/80 to-zinc-900/90 backdrop-blur-3xl" />
-            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.1),transparent)]" />
-            
-            <div className={`absolute ${isNearTop ? '-top-2' : '-bottom-2'} ${isNearRight ? 'right-4' : isNearLeft ? 'left-4' : 'left-1/2 -translate-x-1/2'} w-[2px] h-4 bg-red-500/50 blur-[1px]`} />
-
-            <div className="relative p-5 z-10">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />
-                <h4 className="text-base font-bold text-zinc-50 tracking-wide">{dot.title}</h4>
-              </div>
-              <p className="text-sm text-zinc-300 leading-relaxed font-medium">
-                {dot.desc}
-              </p>
-              <div className="mt-5 flex gap-3">
-                <button className="flex-1 text-xs font-bold bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-3 py-2.5 rounded-xl text-red-100 transition-all shadow-[0_0_10px_rgba(239,68,68,0.1)] hover:shadow-[0_0_15px_rgba(239,68,68,0.3)]">
-                  Fix with AI
-                </button>
-                <button className="flex-1 text-xs font-bold bg-zinc-800/30 hover:bg-zinc-800/60 border border-white/5 hover:border-white/10 px-3 py-2.5 rounded-xl text-zinc-400 transition-all">
-                  Ignore
-                </button>
-              </div>
-            </div>
+            <h4 className="text-[10px] font-bold text-red-700 mb-4 uppercase tracking-[0.3em] font-sans">Director's Note</h4>
+            <p className="text-2xl text-zinc-800 leading-tight italic font-serif">{dot.desc}</p>
           </motion.div>
         )}
       </AnimatePresence>
