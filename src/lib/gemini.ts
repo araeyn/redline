@@ -76,7 +76,7 @@ export async function getSurfaceMap(imageRef: string): Promise<string | null> {
     return URL.createObjectURL(depthBlob);
   } catch (error) {
     console.error("Surface Map Error:", error);
-    return null;
+    return "fallback";
   }
 }
 
