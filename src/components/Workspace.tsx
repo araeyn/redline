@@ -1274,13 +1274,16 @@ export default function Workspace() {
             <div className="flex h-full min-h-0 overflow-hidden rounded-[32px] border border-[#d8c5b2] bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(249,239,226,0.98))] shadow-[0_24px_70px_rgba(88,63,47,0.14)]">
               <div className="flex w-[88px] shrink-0 flex-col items-center justify-between border-r border-[#e6d5c5] bg-[linear-gradient(180deg,rgba(255,250,244,0.98),rgba(246,236,224,0.92))] px-3 py-4">
                 <div className="w-full">
-                  <button
-                    onClick={() => setIsSidebarPinned((prev) => !prev)}
-                    className="mb-4 flex h-11 w-full items-center justify-center rounded-[16px] border border-[#dcc8b4] bg-white/75 text-[#5b4337] shadow-[0_10px_24px_rgba(87,66,55,0.08)] transition hover:-translate-y-0.5 hover:bg-[#fdf5ea]"
-                    title={isSidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
-                  >
-                    <Box size={16} />
-                  </button>
+	                  <button
+	                    onClick={() => setIsSidebarPinned((prev) => !prev)}
+	                    className="mb-4 flex w-full flex-col items-center justify-center rounded-[16px] border border-[#dcc8b4] bg-white/75 px-1.5 py-2 text-[#5b4337] shadow-[0_10px_24px_rgba(87,66,55,0.08)] transition hover:-translate-y-0.5 hover:bg-[#fdf5ea]"
+	                    title={isSidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
+	                  >
+	                    <Box size={16} />
+	                    <span className="mt-1 text-[8px] font-bold uppercase tracking-[0.18em] font-outfit">
+	                      {isSidebarPinned ? "Pinned" : "Pin"}
+	                    </span>
+	                  </button>
 
                   <div className="mb-4 rounded-[18px] border border-[#dfcfbf] bg-white/75 px-2.5 py-3 text-center shadow-[0_10px_24px_rgba(87,66,55,0.08)]">
                     <div className="text-[1.55rem] font-serif italic leading-none tracking-[-0.05em]">
@@ -1291,32 +1294,36 @@ export default function Workspace() {
 
                   <div className="space-y-2">
                     {toolItems.map((item) => (
-                      <button
-                        key={`rail-${item.id}`}
-                        onClick={() => {
-                          void handleTabChange(item.id);
-                        }}
-                        className={clsx(
-                          "flex w-full items-center justify-center rounded-[16px] border px-0 py-3 text-[#70584a] transition",
-                          tab === item.id
-                            ? "border-[#2f211a] bg-[#2f211a] text-[#f8efe3]"
-                            : "border-[#dcc8b4] bg-white/68 hover:bg-[#fdf5ea]",
-                        )}
-                        title={item.label}
-                      >
-                        <item.icon size={15} />
-                      </button>
-                    ))}
-                  </div>
+	                      <button
+	                        key={`rail-${item.id}`}
+	                        onClick={() => {
+	                          void handleTabChange(item.id);
+	                        }}
+	                        className={clsx(
+	                          "flex w-full flex-col items-center justify-center rounded-[16px] border px-1 py-2 text-[#70584a] transition",
+	                          tab === item.id
+	                            ? "border-[#2f211a] bg-[#2f211a] text-[#f8efe3]"
+	                            : "border-[#dcc8b4] bg-white/68 hover:bg-[#fdf5ea]",
+	                        )}
+	                        title={item.label}
+	                      >
+	                        <item.icon size={15} />
+	                        <span className="mt-1 text-[7px] font-bold uppercase tracking-[0.16em] font-outfit">
+	                          {item.label}
+	                        </span>
+	                      </button>
+	                    ))}
+	                  </div>
                 </div>
 
-                <button
-                  onClick={handleExport}
-                  className="flex h-11 w-full items-center justify-center rounded-[16px] border border-[#dcc8b4] bg-white/75 text-[#5b4337] shadow-[0_10px_24px_rgba(87,66,55,0.08)] transition hover:-translate-y-0.5 hover:bg-[#fdf5ea]"
-                  title="Download PNG"
-                >
-                  <Download size={16} />
-                </button>
+	                <button
+	                  onClick={handleExport}
+	                  className="flex w-full flex-col items-center justify-center rounded-[16px] border border-[#dcc8b4] bg-white/75 px-1.5 py-2 text-[#5b4337] shadow-[0_10px_24px_rgba(87,66,55,0.08)] transition hover:-translate-y-0.5 hover:bg-[#fdf5ea]"
+	                  title="Download PNG"
+	                >
+	                  <Download size={16} />
+	                  <span className="mt-1 text-[8px] font-bold uppercase tracking-[0.18em] font-outfit">Save</span>
+	                </button>
               </div>
 
               <AnimatePresence initial={false}>
