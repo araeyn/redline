@@ -225,6 +225,9 @@ export default function Workspace() {
   const [readabilityAnalysis, setReadabilityAnalysis] = useState<ReadabilityAnalysis | null>(null);
   const [isMirrored, setIsMirrored] = useState(false);
   const [isValueView, setIsValueView] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const [isSidebarPinned, setIsSidebarPinned] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const imageStageRef = useRef<HTMLDivElement>(null);
@@ -363,6 +366,19 @@ export default function Workspace() {
       if (sunFrameRef.current !== null) {
         window.cancelAnimationFrame(sunFrameRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const syncDesktopState = () => {
+      setIsDesktop(mediaQuery.matches);
+    };
+
+    syncDesktopState();
+    mediaQuery.addEventListener("change", syncDesktopState);
+    return () => {
+      mediaQuery.removeEventListener("change", syncDesktopState);
     };
   }, []);
 
@@ -670,7 +686,7 @@ export default function Workspace() {
             critiques.push(point as Critique);
           }
         }
-        return critiques.slice(0, 4);
+        return critiques.slice(0, 8);
       })();
 
       const [readability, relightUrl, critiques] = await Promise.all([
@@ -816,8 +832,177 @@ export default function Workspace() {
     setIsMentorOpen(true);
   };
 
-  const handleExport = () => {
-    window.print();
+  const handleTabChange = async (nextTab: ToolTab) => {
+    startTransition(() => {
+      setTab(nextTab);
+    });
+    if ((nextTab === "framing" || nextTab === "palette") && !studioAnalysis && toolStatus[nextTab] === "idle") {
+      await ensureStudioAnalysis();
+    }
+    if (nextTab === "readability" && !readabilityAnalysis && toolStatus.readability === "idle") {
+      await ensureReadabilityAnalysis();
+    }
+  };
+
+  const loadBitmap = async (src: string) => {
+    const response = await fetch(src);
+    const blob = await response.blob();
+    return createImageBitmap(blob);
+  };
+
+  const drawCritiqueMarks = (ctx: CanvasRenderingContext2D, critiques: Critique[], width: number, height: number) => {
+    const outerRadius = Math.max(10, Math.round(Math.min(width, height) * 0.014));
+    const innerRadius = Math.max(4, Math.round(outerRadius * 0.42));
+    critiques.forEach((critique) => {
+      const x = critique.x * 0.01 * width;
+      const y = critique.y * 0.01 * height;
+
+      ctx.save();
+      ctx.shadowColor = "rgba(171,39,24,0.3)";
+      ctx.shadowBlur = outerRadius * 1.8;
+      ctx.fillStyle = "rgba(171,39,24,0.18)";
+      ctx.beginPath();
+      ctx.arc(x, y, outerRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#fff8f1";
+      ctx.strokeStyle = "#a52e1d";
+      ctx.lineWidth = Math.max(2, outerRadius * 0.22);
+      ctx.beginPath();
+      ctx.arc(x, y, innerRadius * 1.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    });
+  };
+
+  const drawRegionOverlay = (ctx: CanvasRenderingContext2D, region: RegionBounds, width: number, height: number) => {
+    ctx.save();
+    ctx.strokeStyle = "#d26f55";
+    ctx.lineWidth = Math.max(3, Math.min(width, height) * 0.004);
+    ctx.fillStyle = "rgba(214,111,85,0.08)";
+
+    const x = region.x * width;
+    const y = region.y * height;
+    const boxWidth = region.width * width;
+    const boxHeight = region.height * height;
+
+    ctx.beginPath();
+    ctx.roundRect(x, y, boxWidth, boxHeight, Math.max(18, Math.min(width, height) * 0.018));
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  const handleExport = async () => {
+    const exportSource = tab === "relight" && relitImage ? relitImage : image;
+    if (!exportSource) {
+      return;
+    }
+
+    try {
+      const baseBitmap = await loadBitmap(exportSource);
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width = baseBitmap.width;
+      exportCanvas.height = baseBitmap.height;
+      const ctx = exportCanvas.getContext("2d");
+      if (!ctx) {
+        return;
+      }
+
+      ctx.save();
+      if (isMirrored) {
+        ctx.translate(exportCanvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      if (isValueView) {
+        ctx.filter = "grayscale(1) contrast(1.18) brightness(1.06)";
+      }
+      ctx.drawImage(baseBitmap, 0, 0, exportCanvas.width, exportCanvas.height);
+      ctx.filter = "none";
+
+      if (tab === "layers" && layerOverlay) {
+        const overlay = await loadBitmap(layerOverlay);
+        ctx.save();
+        ctx.globalAlpha = 0.84;
+        ctx.globalCompositeOperation = "multiply";
+        ctx.drawImage(overlay, 0, 0, exportCanvas.width, exportCanvas.height);
+        ctx.restore();
+      }
+
+      if (tab === "framing" && studioAnalysis) {
+        const heatmap = await loadBitmap(studioAnalysis.heatmapUrl);
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.globalCompositeOperation = "screen";
+        ctx.drawImage(heatmap, 0, 0, exportCanvas.width, exportCanvas.height);
+        ctx.restore();
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.48)";
+        ctx.lineWidth = Math.max(1, Math.min(exportCanvas.width, exportCanvas.height) * 0.0015);
+        for (let i = 1; i < 3; i += 1) {
+          const verticalX = (exportCanvas.width / 3) * i;
+          const horizontalY = (exportCanvas.height / 3) * i;
+          ctx.beginPath();
+          ctx.moveTo(verticalX, 0);
+          ctx.lineTo(verticalX, exportCanvas.height);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(0, horizontalY);
+          ctx.lineTo(exportCanvas.width, horizontalY);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = "rgba(255,255,255,0.72)";
+        ctx.strokeRect(exportCanvas.width * 0.09, exportCanvas.height * 0.14, exportCanvas.width * 0.82, exportCanvas.height * 0.72);
+        ctx.strokeStyle = "rgba(255,255,255,0.52)";
+        ctx.strokeRect(exportCanvas.width * 0.23, exportCanvas.height * 0.23, exportCanvas.width * 0.54, exportCanvas.height * 0.54);
+        ctx.restore();
+      }
+
+      if (tab === "readability" && readabilityAnalysis) {
+        const silhouette = await loadBitmap(readabilityAnalysis.silhouetteUrl);
+        ctx.save();
+        ctx.globalAlpha = 0.66;
+        ctx.globalCompositeOperation = "multiply";
+        ctx.drawImage(silhouette, 0, 0, exportCanvas.width, exportCanvas.height);
+        ctx.restore();
+      }
+
+      if (tab === "critique" && displayedCritiques.length > 0) {
+        drawCritiqueMarks(ctx, displayedCritiques, exportCanvas.width, exportCanvas.height);
+      }
+
+      const region = regionDraft ? getRegionFromDraft(regionDraft) : selectedRegion;
+      if (region) {
+        drawRegionOverlay(ctx, region, exportCanvas.width, exportCanvas.height);
+      }
+      ctx.restore();
+
+      if (tab === "palette" && studioAnalysis) {
+        const swatchBarHeight = Math.max(44, exportCanvas.height * 0.08);
+        const swatchWidth = exportCanvas.width / Math.max(1, studioAnalysis.palette.length);
+        ctx.save();
+        ctx.fillStyle = "rgba(35,23,18,0.72)";
+        ctx.fillRect(0, exportCanvas.height - swatchBarHeight, exportCanvas.width, swatchBarHeight);
+        studioAnalysis.palette.forEach((swatch, index) => {
+          ctx.fillStyle = swatch.hex;
+          ctx.fillRect(index * swatchWidth + 12, exportCanvas.height - swatchBarHeight + 12, swatchWidth - 24, swatchBarHeight - 24);
+        });
+        ctx.restore();
+      }
+
+      const dataUrl = exportCanvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `tryredline-${tab}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Export failed:", error);
+    }
   };
 
   const blurFade = {
@@ -832,44 +1017,45 @@ export default function Workspace() {
   const moodTags = getMoodTags(studioAnalysis);
   const visionScore = getVisionScore(masteryScore, studioAnalysis);
   const actionPlan = getActionPlan(studioAnalysis, displayedCritiques, readabilityAnalysis);
+  const isSidebarOpen = !isDesktop || isSidebarPinned || isSidebarHovered;
   const activeToolMeta = {
     critique: {
-      eyebrow: "Composition Mentor",
-      title: "Read The Artwork",
-      description: "Translate the image into clear focal notes, storytelling pressure, and plain-English revision targets.",
+      eyebrow: "Critique",
+      title: "Find weak spots",
+      description: "Direct notes on focus, value, shape, and story.",
     },
     relight: {
-      eyebrow: "Lighting Model",
-      title: "Push The Light",
-      description: "Test stronger directional lighting with clearer warm highlights and cooler shadow families before repainting.",
+      eyebrow: "Relight",
+      title: "Test new lighting",
+      description: "Move the key light before repainting it for real.",
     },
     layers: {
-      eyebrow: "Structure Pass",
-      title: "Sort Big Shapes",
-      description: "Break noise into shadow masses, midtone scaffolding, and highlight planes so the piece reads like design.",
+      eyebrow: "Layers",
+      title: "Sort big shapes",
+      description: "See the piece as masses instead of detail.",
     },
     framing: {
-      eyebrow: "Framing Lens",
-      title: "Control The Crop",
-      description: "Show where the eye lands first, where the frame compresses, and how the composition could crop more decisively.",
+      eyebrow: "Framing",
+      title: "Check the crop",
+      description: "See where the eye lands and where the frame feels tight.",
     },
     palette: {
       eyebrow: "Style DNA",
-      title: "Decode The Look",
-      description: "Explain color bias, contrast energy, and palette identity in terms both artists and non-artists can read quickly.",
+      title: "Read the palette",
+      description: "Pull out the main color story and contrast bias.",
     },
     readability: {
-      eyebrow: "Readability Test",
-      title: "Stress-Test The Read",
-      description: "Shrink the piece, simplify it, and check if the idea still lands fast at thumbnail scale.",
+      eyebrow: "Readability",
+      title: "Check the read",
+      description: "See whether the piece still works at a glance.",
     },
   }[tab];
   const isPortraitImage = displayAspectRatio < 0.9;
   const isTallImage = displayAspectRatio < 0.72;
   const stageSignalChips = [
-    selectedRegion ? "Region Locked" : "Whole Artwork",
-    isTallImage ? "Tall Fit Active" : isPortraitImage ? "Portrait Smart Fit" : "Full Scene Fit",
-    tab === "relight" && isRelit ? `Light ${lightIntensity.toFixed(1)}x` : toolStatus[tab] === "done" ? "Pass Ready" : "Awaiting Run",
+    selectedRegion ? "Focus region" : activeToolMeta.eyebrow,
+    isTallImage ? "Tall fit" : isPortraitImage ? "Portrait fit" : "Full frame",
+    tab === "relight" && isRelit ? `Light ${lightIntensity.toFixed(1)}x` : toolStatus[tab] === "done" ? "Ready" : "Idle",
   ];
   const topMetrics = [
     { label: "Overall Read", value: `${visionScore}`, tone: `${toolStatus.critique === "done" || studioAnalysis ? "Live" : "Pending"} Audit` },
@@ -976,20 +1162,23 @@ export default function Workspace() {
                 />
               )}
             </AnimatePresence>
-            <h2 className="mb-3 text-6xl font-bold tracking-tighter text-[#261813] italic font-serif md:text-7xl">Redline</h2>
+            <div className="mb-3 flex items-end justify-center gap-0.5">
+              <span className="shimmer-text inline-block text-6xl font-serif italic leading-none tracking-[-0.04em] md:text-7xl">Red</span>
+              <span className="text-6xl font-semibold leading-none tracking-[-0.08em] text-[#231713] md:text-7xl">line</span>
+            </div>
             <p className="mx-auto mb-4 max-w-3xl text-lg leading-relaxed text-[#6f5548] italic md:text-[1.35rem]">
               {isDragging
-                ? "Drop the artwork to launch a full creative diagnosis."
-                : "An artist-first direction desk for works in progress: critique the read, test the light, isolate weak regions, and decide the next pass before you over-render."}
+                ? "Drop the artwork to open it in the studio."
+                : "Upload a work in progress, check the read, test the light, and decide what to fix next."}
             </p>
             <p className="mx-auto mb-8 max-w-3xl text-sm leading-relaxed text-[#8b6d5a] font-outfit md:text-[0.95rem]">
-              Built to mentor creators, not replace them. Redline reads hierarchy, value grouping, silhouette clarity, crop pressure, lighting logic, and palette DNA so artists can make stronger decisions faster.
+              Redline is built for artists in the middle of a piece. It helps with critique, readability, lighting, and problem areas without taking over the work.
             </p>
             <div className="mx-auto mb-8 grid max-w-4xl gap-3 md:grid-cols-3">
               {[
-                ["Local Mentor", "Box a problem area and get a targeted pass instead of re-reading the whole piece."],
-                ["Readability Stress Test", "See whether the image still lands at thumbnail size before spending another hour rendering."],
-                ["Studio Shortcuts", "Use Focus, Mirror, and Value View like quick artist checks, not just a flashy demo."],
+                ["Local Mentor", "Box one area and get feedback just for that part of the piece."],
+                ["Readability", "Check whether the piece still works small before you keep rendering."],
+                ["Quick Checks", "Use Focus, Mirror, and Value View like fast studio habits."],
               ].map(([title, desc]) => (
                 <div
                   key={title}
@@ -1013,7 +1202,7 @@ export default function Workspace() {
               </button>
             </div>
             <p className="mx-auto mt-5 max-w-2xl text-[10px] font-semibold uppercase tracking-[0.24em] text-[#8f6f5b] font-outfit">
-              Drop a WIP, swap images instantly, then press <span className="text-[#a22a1e]">F</span>, <span className="text-[#a22a1e]">M</span>, or <span className="text-[#a22a1e]">V</span> in the studio.
+              Drop a piece, swap images fast, then press <span className="text-[#a22a1e]">F</span>, <span className="text-[#a22a1e]">M</span>, or <span className="text-[#a22a1e]">V</span>.
             </p>
           </div>
         </motion.div>
@@ -1061,25 +1250,96 @@ export default function Workspace() {
           ))}
         </div>
 
-        <div className="grid min-h-0 flex-1 items-start gap-4 lg:grid-cols-[360px,minmax(0,1fr)] xl:grid-cols-[390px,minmax(0,1fr)]">
+        <div className="relative flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
           <motion.aside
             initial={{ x: -30, opacity: 0, filter: "blur(14px)" }}
-            animate={{ x: 0, opacity: 1, filter: "blur(0px)" }}
+            animate={{
+              x: 0,
+              opacity: 1,
+              filter: "blur(0px)",
+              width: isDesktop ? (isSidebarOpen ? 368 : 88) : "100%",
+            }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="min-h-0 xl:h-full"
+            onMouseEnter={() => setIsSidebarHovered(true)}
+            onMouseLeave={() => setIsSidebarHovered(false)}
+            className="relative min-h-0 w-full shrink-0 overflow-visible lg:h-full"
           >
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[32px] border border-[#d8c5b2] bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(249,239,226,0.98))] shadow-[0_24px_70px_rgba(88,63,47,0.14)]">
+            {isDesktop && (
+              <div
+                className="absolute -left-5 inset-y-0 z-20 w-6"
+                onMouseEnter={() => setIsSidebarHovered(true)}
+              />
+            )}
+
+            <div className="flex h-full min-h-0 overflow-hidden rounded-[32px] border border-[#d8c5b2] bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(249,239,226,0.98))] shadow-[0_24px_70px_rgba(88,63,47,0.14)]">
+              <div className="flex w-[88px] shrink-0 flex-col items-center justify-between border-r border-[#e6d5c5] bg-[linear-gradient(180deg,rgba(255,250,244,0.98),rgba(246,236,224,0.92))] px-3 py-4">
+                <div className="w-full">
+                  <button
+                    onClick={() => setIsSidebarPinned((prev) => !prev)}
+                    className="mb-4 flex h-11 w-full items-center justify-center rounded-[16px] border border-[#dcc8b4] bg-white/75 text-[#5b4337] shadow-[0_10px_24px_rgba(87,66,55,0.08)] transition hover:-translate-y-0.5 hover:bg-[#fdf5ea]"
+                    title={isSidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
+                  >
+                    <Box size={16} />
+                  </button>
+
+                  <div className="mb-4 rounded-[18px] border border-[#dfcfbf] bg-white/75 px-2.5 py-3 text-center shadow-[0_10px_24px_rgba(87,66,55,0.08)]">
+                    <div className="text-[1.55rem] font-serif italic leading-none tracking-[-0.05em]">
+                      <span className="shimmer-text">R</span>
+                    </div>
+                    <div className="mt-1 text-[7px] font-bold uppercase tracking-[0.26em] text-[#816756] font-outfit">Try</div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {toolItems.map((item) => (
+                      <button
+                        key={`rail-${item.id}`}
+                        onClick={() => {
+                          void handleTabChange(item.id);
+                        }}
+                        className={clsx(
+                          "flex w-full items-center justify-center rounded-[16px] border px-0 py-3 text-[#70584a] transition",
+                          tab === item.id
+                            ? "border-[#2f211a] bg-[#2f211a] text-[#f8efe3]"
+                            : "border-[#dcc8b4] bg-white/68 hover:bg-[#fdf5ea]",
+                        )}
+                        title={item.label}
+                      >
+                        <item.icon size={15} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleExport}
+                  className="flex h-11 w-full items-center justify-center rounded-[16px] border border-[#dcc8b4] bg-white/75 text-[#5b4337] shadow-[0_10px_24px_rgba(87,66,55,0.08)] transition hover:-translate-y-0.5 hover:bg-[#fdf5ea]"
+                  title="Download PNG"
+                >
+                  <Download size={16} />
+                </button>
+              </div>
+
+              <AnimatePresence initial={false}>
+                {isSidebarOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, filter: "blur(14px)", x: -18 }}
+                    animate={{ opacity: 1, filter: "blur(0px)", x: 0 }}
+                    exit={{ opacity: 0, filter: "blur(14px)", x: -18 }}
+                    transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+                  >
               <div className="border-b border-[#e6d5c5] px-6 py-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h1 className="text-3xl font-bold tracking-tighter text-[#241713] italic font-serif">Director&apos;s Ledger</h1>
-                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.32em] text-[#8f6f5b] font-outfit">Creative Analysis Deck</p>
+                    <h1 className="text-3xl font-bold tracking-tighter text-[#241713] italic font-serif">Critique Notes</h1>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.32em] text-[#8f6f5b] font-outfit">Current Piece</p>
                   </div>
                   <button
-                    onClick={handleExport}
+                    onClick={() => setIsSidebarPinned((prev) => !prev)}
                     className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[#d7c4af] bg-[#fbf4ea] text-[#574237] shadow-[0_10px_24px_rgba(87,66,55,0.08)] transition hover:-translate-y-0.5 hover:bg-[#f6ede1]"
+                    title={isSidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
                   >
-                    <Download size={16} />
+                    <Box size={16} />
                   </button>
                 </div>
               </div>
@@ -1091,9 +1351,9 @@ export default function Workspace() {
                     className="flex w-full items-start justify-between gap-3 text-left"
                   >
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#9b735f] font-outfit">Full Mentor Pass</p>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#9b735f] font-outfit">Full Pass</p>
                       <p className="mt-1 text-[13px] leading-relaxed text-[#715849]">
-                        Run critique, structure, palette, framing, and readability analysis together for a presentation-ready read.
+                        Run the main checks together and get a clean first read on the piece.
                       </p>
                     </div>
                     <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d9c9bb] bg-white/80 text-[16px] text-[#5a4337]">
@@ -1121,7 +1381,7 @@ export default function Workspace() {
                             ))}
                           </div>
                           <div className="mb-3 rounded-[18px] border border-[#e2d2c3] bg-white/60 px-4 py-3 text-[12px] leading-relaxed text-[#6e5648]">
-                            Artist workflow: run the broad audit first, then use the plan and local mentor pass to decide what to repaint instead of guessing.
+                            Start broad, then zoom in where the piece is actually slipping.
                           </div>
                           <button onClick={handleFullAudit} disabled={isAuditing} className={paperPrimaryButton}>
                             {isAuditing ? "Running Full Audit" : "Run Full Audit"}
@@ -1134,7 +1394,7 @@ export default function Workspace() {
                               <div>
                                 <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#8d6c59] font-outfit">Next Pass Plan</div>
                                 <div className="mt-1 text-[12px] text-[#7c6253] font-outfit">
-                                  {isPlanOpen ? "Concrete artist actions from the current audit." : "Open for prioritized paintover targets and iteration steps."}
+                                  {isPlanOpen ? "Clear next steps from the current pass." : "Open for a short fix list."}
                                 </div>
                               </div>
                               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#d9c9bb] bg-white/80 text-[16px] text-[#5a4337]">
@@ -1172,9 +1432,9 @@ export default function Workspace() {
 
                 {selectedRegion && (
                   <div className="mb-5 rounded-[24px] border border-[#e4d3c3] bg-[linear-gradient(180deg,rgba(245,239,255,0.92),rgba(255,255,255,0.72))] px-4 py-4 shadow-[0_12px_30px_rgba(87,66,55,0.05)]">
-                    <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.24em] text-[#8f62a5] font-outfit">Local Mentor Pass</div>
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.24em] text-[#8f62a5] font-outfit">Focus Region</div>
                     <p className="text-[13px] leading-relaxed text-[#6f5b7e]">
-                      Analyze only the boxed region to diagnose a local problem area without rerunning the whole artwork.
+                      Run feedback just on the boxed area.
                     </p>
                     <div className="mt-4 flex gap-3">
                       <button onClick={runLocalMentorPass} disabled={localPassStatus === "loading"} className={paperPrimaryButton}>
@@ -1231,7 +1491,7 @@ export default function Workspace() {
                             )}
 
                             <div className="rounded-[20px] border border-[#e4d3c3] bg-white/75 px-4 py-4 shadow-[0_10px_24px_rgba(87,66,55,0.05)]">
-                              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#8d6c59] font-outfit">Plain-English Takeaway</div>
+                              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#8d6c59] font-outfit">Quick Read</div>
                               <p className="text-[13px] leading-relaxed text-[#684f43]">
                                 {localPass.readability && localPass.readability.metrics.thumbnailRead < 0.55
                                   ? "This boxed area is losing clarity when viewed quickly. Simplifying the small shapes here will make the overall image easier to understand."
@@ -1266,7 +1526,7 @@ export default function Workspace() {
                     {tab === "critique" ? (
                       <div className="space-y-5">
                     <p className="text-base leading-relaxed text-[#6a5043] italic">
-                      Read focus, structure, spacing, value, and visual hierarchy before committing the next pass on the canvas.
+                      Check focus, value, spacing, and overall read before you keep rendering.
                     </p>
 
                     {toolStatus.critique !== "done" && displayedCritiques.length === 0 && (
@@ -1329,7 +1589,7 @@ export default function Workspace() {
                     ) : tab === "relight" ? (
                       <div className="space-y-5">
                     <p className="text-base leading-relaxed text-[#6a5043] italic">
-                      Compute a point-light pass from inferred surface gradients so you can audition highlight flow before repainting.
+                      Try a new light direction before you repaint it by hand.
                     </p>
 
                     {!isRelit && toolStatus.relight === "idle" && (
@@ -1346,8 +1606,8 @@ export default function Workspace() {
                       <motion.div {...blurFade} className="space-y-6">
                         <InfoCard
                           accent="amber"
-                          title="Lighting Model Active"
-                          description="Drag the key light across the canvas to recompute shadow direction, highlight intensity, and focal emphasis."
+                          title="Relight Active"
+                          description="Drag the light to try stronger shadows, highlights, and mood."
                           icon={<Sun size={14} />}
                         />
 
@@ -1357,7 +1617,7 @@ export default function Workspace() {
                             <span className="text-base font-bold italic text-[#241713] font-serif">{lightIntensity.toFixed(1)}x</span>
                           </div>
                           <div className="rounded-[18px] border border-[#ecdcc8] bg-[linear-gradient(180deg,rgba(255,248,236,0.86),rgba(255,255,255,0.72))] px-4 py-3 text-[12px] leading-relaxed text-[#6b5244] shadow-[0_8px_20px_rgba(87,66,55,0.05)]">
-                            Lower settings keep the light gentle. Higher settings deepen shadow carve-out, brighten the key side, and exaggerate warm-versus-cool separation for a more judge-visible change.
+                            Lower settings stay subtle. Higher settings push the shadows and make the lighting change read faster.
                           </div>
                           <input
                             type="range"
@@ -1388,7 +1648,7 @@ export default function Workspace() {
                     ) : tab === "layers" ? (
                       <div className="space-y-5">
                     <p className="text-base leading-relaxed text-[#6a5043] italic">
-                      Segment value masses and edge zones into readable blocks so the scene can be reorganized as structure instead of noise.
+                      Break the piece into larger value and edge masses.
                     </p>
 
                     {!layers.length && toolStatus.layers === "idle" && (
@@ -1403,8 +1663,8 @@ export default function Workspace() {
                       <motion.div {...blurFade} className="space-y-5">
                         <InfoCard
                           accent="violet"
-                          title="Layer Deconstruction Ready"
-                          description="Generated overlay now separates shadow mass, midtone scaffolding, highlight planes, and edge intensity."
+                          title="Layer Pass Ready"
+                          description="The overlay separates shadow mass, midtones, highlights, and edge density."
                           icon={<Box size={14} />}
                         />
 
@@ -1441,7 +1701,7 @@ export default function Workspace() {
                     ) : tab === "framing" ? (
                       <div className="space-y-5">
                     <p className="text-base leading-relaxed text-[#6a5043] italic">
-                      Map focal energy, compositional balance, and crop direction to turn a rough sketch into a more intentional frame.
+                      Check eye flow, balance, and crop pressure.
                     </p>
 
                     {!studioAnalysis && toolStatus.framing === "idle" && (
@@ -1461,8 +1721,8 @@ export default function Workspace() {
                       <motion.div {...blurFade} className="space-y-5">
                         <InfoCard
                           accent="rose"
-                          title="Framing Diagnostics Ready"
-                          description="Heatmap, crop suggestions, and compositional signals are now reading from the same focus-energy pass."
+                          title="Framing Pass Ready"
+                          description="Heatmap, crop ideas, and composition notes are ready."
                           icon={<Search size={14} />}
                         />
 
@@ -1484,7 +1744,7 @@ export default function Workspace() {
                     ) : tab === "palette" ? (
                       <div className="space-y-5">
                     <p className="text-base leading-relaxed text-[#6a5043] italic">
-                      Extract palette dominance, tonal energy, and stylistic bias so the piece reads like a designed language, not a pile of colors.
+                      Pull out the main palette and overall color bias.
                     </p>
 
                     {!studioAnalysis && toolStatus.palette === "idle" && (
@@ -1505,7 +1765,7 @@ export default function Workspace() {
                         <InfoCard
                           accent="emerald"
                           title="Style DNA Ready"
-                          description="Dominant palette, chroma profile, warmth bias, and symmetry signal have been extracted into a reusable stylistic fingerprint."
+                          description="Main colors, warmth, saturation, and symmetry are mapped out."
                           icon={<Gauge size={14} />}
                         />
 
@@ -1549,7 +1809,7 @@ export default function Workspace() {
                     ) : (
                       <div className="space-y-5">
                     <p className="text-base leading-relaxed text-[#6a5043] italic">
-                      Stress-test the image at thumbnail scale so you can see whether the idea still reads before spending another hour rendering details.
+                      Shrink the piece down and see if it still reads quickly.
                     </p>
 
                     {!readabilityAnalysis && toolStatus.readability === "idle" && (
@@ -1569,8 +1829,8 @@ export default function Workspace() {
                       <motion.div {...blurFade} className="space-y-5">
                         <InfoCard
                           accent="amber"
-                          title="Readability Stress Test Ready"
-                          description="Silhouette separation, edge clarity, and thumbnail hierarchy have been evaluated across compressed views."
+                          title="Readability Ready"
+                          description="Small-size read, silhouette, and edge clarity are ready to review."
                           icon={<Eye size={14} />}
                         />
 
@@ -1629,30 +1889,25 @@ export default function Workspace() {
                   Change Art Piece
                 </button>
               </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.aside>
 
-          <section className="flex min-h-0 flex-col min-w-0">
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col">
             <motion.div
               initial={{ y: -18, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.55, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-              className="z-30 mb-3 flex shrink-0 justify-center lg:justify-start"
+              className="z-30 mb-3 flex shrink-0 justify-center lg:hidden"
             >
               <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-[#dbc9b5] bg-[#fffaf2]/92 p-2 shadow-[0_18px_44px_rgba(92,65,46,0.12)] backdrop-blur-xl">
                 {toolItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={async () => {
-                      startTransition(() => {
-                        setTab(item.id);
-                      });
-                      if ((item.id === "framing" || item.id === "palette") && !studioAnalysis && toolStatus[item.id] === "idle") {
-                        await ensureStudioAnalysis();
-                      }
-                      if (item.id === "readability" && !readabilityAnalysis && toolStatus.readability === "idle") {
-                        await ensureReadabilityAnalysis();
-                      }
+                    onClick={() => {
+                      void handleTabChange(item.id);
                     }}
                     className={clsx(
                       "relative flex items-center gap-2 rounded-full px-5 py-3 text-[10px] font-bold uppercase tracking-[0.26em] transition-colors duration-200 font-outfit",
@@ -1689,36 +1944,36 @@ export default function Workspace() {
                 onDragOver={handleCanvasDragOver}
                 onDragLeave={handleCanvasDragLeave}
                 onDrop={handleCanvasDrop}
-                className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[28px] border border-[#e4d5c5] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.95),rgba(247,235,220,0.96))] px-2.5 pb-3 pt-3"
+                className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-[28px] border border-[#e4d5c5] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.95),rgba(247,235,220,0.96))] px-2 pb-2 pt-2"
               >
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.65),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.2),rgba(114,78,54,0.06))]" />
-                <div className="relative z-20 mb-2 rounded-[22px] border border-white/65 bg-[linear-gradient(180deg,rgba(255,255,255,0.76),rgba(248,239,228,0.64))] px-3 py-2.5 shadow-[0_12px_28px_rgba(87,66,55,0.07)] backdrop-blur-xl">
-                  <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="text-[9px] font-bold uppercase tracking-[0.32em] text-[#9d7762] font-outfit">{activeToolMeta.eyebrow}</div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                        <h2 className="text-[1.2rem] font-bold italic tracking-tight text-[#241713] font-serif md:text-[1.28rem]">{activeToolMeta.title}</h2>
-                        <span className="rounded-full border border-[#e0d1c0] bg-white/75 px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.2em] text-[#816756] font-outfit">
-                          {toolStatus[tab] === "loading" ? "Analyzing" : toolStatus[tab] === "done" ? "Live Output" : "Ready"}
-                        </span>
-                      </div>
-                      <p className="mt-1 hidden max-w-2xl text-[11px] leading-relaxed text-[#6f5548] lg:block">{activeToolMeta.description}</p>
+                <div className="absolute left-3 top-3 z-20 max-w-[calc(100%-1.5rem)]">
+                  <div className="group inline-flex flex-col gap-2">
+                    <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/70 bg-[rgba(255,251,245,0.86)] px-3 py-2 shadow-[0_12px_28px_rgba(87,66,55,0.08)] backdrop-blur-xl">
+                      <span className="text-[9px] font-bold uppercase tracking-[0.26em] text-[#8d6c59] font-outfit">{activeToolMeta.eyebrow}</span>
+                      <span className="rounded-full border border-[#e0d1c0] bg-white/75 px-2 py-1 text-[8px] font-bold uppercase tracking-[0.18em] text-[#816756] font-outfit">
+                        {toolStatus[tab] === "loading" ? "Working" : toolStatus[tab] === "done" ? "Ready" : "Idle"}
+                      </span>
                     </div>
-
-                    <div className="flex flex-wrap gap-1.5 lg:justify-end">
-                      {stageSignalChips.map((chip) => (
-                        <span
-                          key={chip}
-                          className="rounded-full border border-[#dfcfbf] bg-white/78 px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.18em] text-[#735848] shadow-[0_6px_16px_rgba(87,66,55,0.05)] font-outfit"
-                        >
-                          {chip}
-                        </span>
-                      ))}
+                    <div className="pointer-events-auto max-h-0 overflow-hidden opacity-0 transition-all duration-250 group-hover:max-h-32 group-hover:opacity-100">
+                      <div className="w-[18rem] rounded-[18px] border border-white/70 bg-[rgba(255,251,245,0.88)] px-3 py-3 text-[12px] leading-relaxed text-[#6f5548] shadow-[0_12px_28px_rgba(87,66,55,0.08)] backdrop-blur-xl">
+                        {activeToolMeta.description}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {stageSignalChips.map((chip) => (
+                            <span
+                              key={chip}
+                              className="rounded-full border border-[#dfcfbf] bg-white/78 px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.18em] text-[#735848] font-outfit"
+                            >
+                              {chip}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div ref={imageStageRef} className="relative z-10 flex min-h-0 flex-1 items-center justify-center pb-2">
+                <div ref={imageStageRef} className="relative z-10 flex min-h-0 flex-1 items-center justify-center py-2">
                   <div
                     className={clsx(
                       "relative inline-flex max-h-full max-w-full overflow-visible rounded-[22px] border border-[#eadbca] bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(250,243,235,0.94))] p-2 shadow-[0_24px_60px_rgba(84,58,42,0.15)] transition duration-300",
@@ -1727,7 +1982,7 @@ export default function Workspace() {
                       isValueView && "grayscale contrast-[1.18] brightness-[1.06]",
                     )}
                     style={{
-                      maxWidth: isPortraitImage ? "min(100%, 34rem)" : undefined,
+                      maxWidth: isPortraitImage ? "min(100%, 40rem)" : undefined,
                     }}
                   >
                     <div className="pointer-events-none absolute inset-x-7 top-0 h-10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.92),rgba(255,255,255,0))]" />
@@ -1744,11 +1999,11 @@ export default function Workspace() {
                       }}
                       className={clsx(
                         "block h-auto w-auto rounded-[16px] object-contain",
-                        isPortraitImage ? "max-w-full" : "max-w-full lg:max-w-[calc(100vw-470px)] xl:max-w-[calc(100vw-620px)]",
+                        isPortraitImage ? "max-w-full" : "max-w-full lg:max-w-[calc(100vw-320px)] xl:max-w-[calc(100vw-380px)]",
                       )}
                       style={{
-                        maxHeight: isTallImage ? "min(40vh, 30rem)" : isPortraitImage ? "min(46vh, 34rem)" : "min(52vh, 36rem)",
-                        maxWidth: isPortraitImage ? "min(100%, 32rem)" : undefined,
+                        maxHeight: isTallImage ? "min(56vh, 42rem)" : isPortraitImage ? "min(62vh, 46rem)" : "min(69vh, 48rem)",
+                        maxWidth: isPortraitImage ? "min(100%, 38rem)" : undefined,
                       }}
                     />
 
@@ -1908,11 +2163,11 @@ export default function Workspace() {
                   </AnimatePresence>
                 </div>
 
-                <div className="relative z-20 mx-auto grid w-full max-w-[19rem] shrink-0 grid-cols-3 gap-2 rounded-[24px] border border-white/60 bg-[rgba(255,251,245,0.76)] p-2 shadow-[0_16px_34px_rgba(87,66,55,0.12)] backdrop-blur-xl md:max-w-[21rem]">
+                <div className="relative z-20 mx-auto grid w-full max-w-[16.5rem] shrink-0 grid-cols-3 gap-1.5 rounded-[22px] border border-white/60 bg-[rgba(255,251,245,0.62)] p-1.5 shadow-[0_14px_28px_rgba(87,66,55,0.1)] opacity-85 backdrop-blur-xl transition hover:opacity-100 md:max-w-[18rem]">
                   <button
                     onClick={handleFocusRegionToggle}
                     className={clsx(
-                      "rounded-[18px] border px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] backdrop-blur-xl transition font-outfit",
+                      "rounded-[16px] border px-2 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] backdrop-blur-xl transition font-outfit",
                       isSelectingRegion || selectedRegion || regionDraft
                         ? "border-[#2f211a] bg-[#2f211a] text-[#f8efe3]"
                         : "border-[#d9c8b7] bg-white/70 text-[#6f5648] hover:bg-[#fbf2e7]",
@@ -1924,7 +2179,7 @@ export default function Workspace() {
                   <button
                     onClick={() => setIsMirrored((prev) => !prev)}
                     className={clsx(
-                      "rounded-[18px] border px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] backdrop-blur-xl transition font-outfit",
+                      "rounded-[16px] border px-2 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] backdrop-blur-xl transition font-outfit",
                       isMirrored
                         ? "border-[#2f211a] bg-[#2f211a] text-[#f8efe3]"
                         : "border-[#d9c8b7] bg-white/70 text-[#6f5648] hover:bg-[#fbf2e7]",
@@ -1936,7 +2191,7 @@ export default function Workspace() {
                   <button
                     onClick={() => setIsValueView((prev) => !prev)}
                     className={clsx(
-                      "rounded-[18px] border px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] backdrop-blur-xl transition font-outfit",
+                      "rounded-[16px] border px-2 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] backdrop-blur-xl transition font-outfit",
                       isValueView
                         ? "border-[#2f211a] bg-[#2f211a] text-[#f8efe3]"
                         : "border-[#d9c8b7] bg-white/70 text-[#6f5648] hover:bg-[#fbf2e7]",
