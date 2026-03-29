@@ -1285,14 +1285,7 @@ export default function Workspace() {
 	                    </span>
 	                  </button>
 
-                  <div className="mb-4 rounded-[18px] border border-[#dfcfbf] bg-white/75 px-2.5 py-3 text-center shadow-[0_10px_24px_rgba(87,66,55,0.08)]">
-                    <div className="text-[1.55rem] font-serif italic leading-none tracking-[-0.05em]">
-                      <span className="shimmer-text">R</span>
-                    </div>
-                    <div className="mt-1 text-[7px] font-bold uppercase tracking-[0.26em] text-[#816756] font-outfit">Try</div>
-                  </div>
-
-                  <div className="space-y-2">
+	                  <div className="space-y-2">
                     {toolItems.map((item) => (
 	                      <button
 	                        key={`rail-${item.id}`}
@@ -1335,21 +1328,12 @@ export default function Workspace() {
                     transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                     className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
                   >
-              <div className="border-b border-[#e6d5c5] px-6 py-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h1 className="text-3xl font-bold tracking-tighter text-[#241713] italic font-serif">Critique Notes</h1>
-                    <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.32em] text-[#8f6f5b] font-outfit">Current Piece</p>
-                  </div>
-                  <button
-                    onClick={() => setIsSidebarPinned((prev) => !prev)}
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-[#d7c4af] bg-[#fbf4ea] text-[#574237] shadow-[0_10px_24px_rgba(87,66,55,0.08)] transition hover:-translate-y-0.5 hover:bg-[#f6ede1]"
-                    title={isSidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
-                  >
-                    <Box size={16} />
-                  </button>
-                </div>
-              </div>
+	              <div className="border-b border-[#e6d5c5] px-6 py-5">
+	                <div>
+	                  <h1 className="text-3xl font-bold tracking-tighter text-[#241713] italic font-serif">Critique Notes</h1>
+	                  <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.32em] text-[#8f6f5b] font-outfit">Current Piece</p>
+	                </div>
+	              </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
                 <div className="mb-5 rounded-[24px] border border-[#e4d3c3] bg-[linear-gradient(180deg,rgba(251,241,231,0.92),rgba(255,255,255,0.66))] px-4 py-4 shadow-[0_12px_30px_rgba(87,66,55,0.05)]">
